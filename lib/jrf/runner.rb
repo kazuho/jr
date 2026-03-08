@@ -155,8 +155,7 @@ module Jrf
         reducers = stage[:reducers]
         break unless reducers&.any?
 
-        out = finish_reducer_template(stage[:reducer_template], reducers, top_level: true)
-        rows = stage[:reducer_template].is_a?(RowContext::ReducerToken) ? out : [out]
+        rows = finish_reducer_rows(stage[:reducer_template], reducers)
         rows.each { |value| process_value(value, tail.drop(1), ctx) }
         tail = tail.drop(1)
       end
@@ -197,10 +196,18 @@ module Jrf
       stage[:reducers]&.any?
     end
 
-    def finish_reducer_template(template, reducers, top_level: false)
+    def finish_reducer_rows(template, reducers)
+      if template.is_a?(RowContext::ReducerToken)
+        reducers.fetch(template.index).finish
+      else
+        [finish_reducer_template(template, reducers)]
+      end
+    end
+
+    def finish_reducer_template(template, reducers)
       if template.is_a?(RowContext::ReducerToken)
         rows = reducers.fetch(template.index).finish
-        top_level ? rows : rows.first
+        rows.length == 1 ? rows.first : rows
       elsif template.is_a?(Array)
         template.map { |v| finish_reducer_template(v, reducers) }
       elsif template.is_a?(Hash)
