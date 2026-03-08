@@ -33,12 +33,12 @@ In addition, `jr` is extremely fast thanks to Ruby's JSON parser and the JIT.
 In this workload/environment, a simple test shows over 3x boost compared to `jq`:
 
 ```sh
-% gunzip < large.json.gz | time jq -s 'map(.tid) | min'
+% time jq -s 'map(.tid) | min' < large.ldjson
 327936
-jq -s 'map(.tid) | min'  4.89s user 0.85s system 98% cpu 5.848 total
-% gunzip < large.json.gz | time exe/jr 'min(_["tid"])'  
+jq -s 'map(.tid) | min' < large.ldjson  4.90s user 0.46s system 99% cpu 5.395 total
+% time jr 'min(_["tid"])' < large.ldjson
 327936
-exe/jr 'min(_["tid"])'  1.53s user 0.12s system 98% cpu 1.678 total
+exe/jr 'min(_["tid"])' < large.ldjson  1.37s user 0.15s system 99% cpu 1.531 total
 ```
 
 ## INPUT AND OUTPUT
