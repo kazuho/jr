@@ -285,6 +285,21 @@ assert_equal(
   "array percentile output"
 )
 
+input_multi_cols = <<~NDJSON
+  {"a":1,"b":10}
+  {"a":2,"b":20}
+  {"a":3,"b":30}
+  {"a":4,"b":40}
+NDJSON
+
+stdout, stderr, status = run_jrf('{a: percentile(_["a"], [0.25, 0.50, 1.0]), b: percentile(_["b"], [0.25, 0.50, 1.0])}', input_multi_cols)
+assert_success(status, stderr, "nested array percentile for multiple columns")
+assert_equal(
+  ['{"a":[{"percentile":0.25,"value":1},{"percentile":0.5,"value":2},{"percentile":1.0,"value":4}],"b":[{"percentile":0.25,"value":10},{"percentile":0.5,"value":20},{"percentile":1.0,"value":40}]}'],
+  lines(stdout),
+  "nested array percentile output"
+)
+
 input_reduce = <<~NDJSON
   {"s":"hello"}
   {"s":"world"}
