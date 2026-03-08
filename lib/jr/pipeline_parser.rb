@@ -19,7 +19,7 @@ module Jr
         {
           kind: :select,
           original: stage,
-          src: "__jr_select__(#{parse_select!(stage)})"
+          src: "(#{parse_select!(stage)}) ? _ : ::Jr::Control::DROPPED"
         }
       else
         reject_unsupported_stage!(stage)

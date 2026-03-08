@@ -3,6 +3,5 @@
 module Jr
   module Control
     DROPPED = Object.new.freeze
-    KEEP_INPUT = Object.new.freeze
   end
 end

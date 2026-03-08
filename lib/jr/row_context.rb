@@ -17,10 +17,6 @@ module Jr
       @obj
     end
 
-    def __jr_select__(predicate)
-      predicate ? Control::KEEP_INPUT : Control::DROPPED
-    end
-
     def sum(value, initial: 0)
       Reducers.sum_event(value, initial: initial)
     end

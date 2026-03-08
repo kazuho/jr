@@ -69,8 +69,6 @@ module Jr
       value = eval_stage(stage, input, ctx)
       if value.equal?(Control::DROPPED)
         Control::DROPPED
-      elsif value.equal?(Control::KEEP_INPUT)
-        input
       elsif reducer_event?(value)
         stage[:reducer] ||= value.factory.call
         stage[:reducer_factory] ||= value.factory
