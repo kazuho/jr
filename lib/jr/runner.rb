@@ -38,15 +38,22 @@ module Jr
       ctx = RowContext.new
       compiled = compile_stages(stages, ctx)
       initialize_reducers(compiled, ctx)
+      error = nil
 
-      @input.each_line do |line|
-        line = line.strip
-        next if line.empty?
+      begin
+        @input.each_line do |line|
+          line = line.strip
+          next if line.empty?
 
-        process_value(JSON.parse(line), compiled, ctx)
+          process_value(JSON.parse(line), compiled, ctx)
+        end
+      rescue StandardError => e
+        error = e
+      ensure
+        flush_reducers(compiled, ctx)
       end
 
-      flush_reducers(compiled, ctx)
+      raise error if error
     end
 
     private
@@ -85,6 +92,7 @@ module Jr
       elsif reducer_event?(value)
         stage[:reducer] ||= value.factory.call
         stage[:reducer_factory] ||= value.factory
+        stage[:reducer_emit_many] = value.emit_many if stage[:reducer_emit_many].nil?
         stage[:reducer].step(value.value)
         Control::DROPPED
       else
@@ -115,7 +123,12 @@ module Jr
         stage[:reducer] ||= stage[:reducer_factory]&.call
         break unless stage[:reducer]
 
-        process_value(stage[:reducer].finish, tail.drop(1), ctx)
+        out = stage[:reducer].finish
+        if stage[:reducer_emit_many]
+          out.each { |value| process_value(value, tail.drop(1), ctx) }
+        else
+          process_value(out, tail.drop(1), ctx)
+        end
         tail = tail.drop(1)
       end
     end
@@ -148,6 +161,7 @@ module Jr
           value = eval_stage(stage, PROBE_VALUE, ctx)
           if reducer_event?(value)
             stage[:reducer_factory] = value.factory
+            stage[:reducer_emit_many] = value.emit_many
             stage[:reducer] = value.factory.call
           end
         rescue StandardError

@@ -33,6 +33,24 @@ module Jr
       Reducers.event(value, initial: nil) { |acc, v| acc.nil? || v > acc ? v : acc }
     end
 
+    def sort(key = @obj, &compare)
+      if compare
+        Reducers.event(@obj, initial: [], emit_many: true, finish: ->(rows) { rows.sort(&compare) }) do |rows, row|
+          rows << row
+        end
+      else
+        Reducers.event([key, @obj], initial: [], emit_many: true, finish: ->(pairs) {
+          pairs.sort_by(&:first).map(&:last)
+        }) do |pairs, pair|
+          pairs << pair
+        end
+      end
+    end
+
+    def group(value = @obj)
+      Reducers.event(value, initial: []) { |acc, v| acc << v }
+    end
+
     NO_KW = Object.new
 
     def reduce(*args, initial: NO_KW, &block)
