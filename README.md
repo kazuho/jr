@@ -43,15 +43,15 @@ exe/jr 'min(_["tid"])'  1.53s user 0.12s system 98% cpu 1.678 total
 
 ## INPUT AND OUTPUT
 
-- Input and output are NDJSON (one JSON value per line):
+- Input and output are NDJSON (one JSON value per line).
 - Empty lines are skipped.
 - Each non-empty line is parsed with `JSON.parse`.
 
 ## BUILT-IN FUNCTIONS
 
-`jr` procceses the input using a multi-stage pipeline that is connected by top-level `>>`.
+`jr` processes the input using a multi-stage pipeline that is connected by top-level `>>`.
 
-Within each stage, the current JSON value is available as `_`, and following built-in functions are provided.
+Within each stage, the current JSON value is available as `_`, and the following built-in functions are provided.
 
 ### select(predicate)
 
@@ -69,12 +69,16 @@ Expands an Array into multiple rows, one output row per element.
 jr '_["items"] >> flat'
 ```
 
+### group
 ### group(expr)
 
 Collects values into one Array. This is the opposite of `flat`.
+`group` (without arguments) is shorthand for `group(_)`, i.e., collect the current stage value as-is.
+`group(expr)` first evaluates `expr` and collects that result instead.
 
 ```sh
 jr '_["id"] >> group'
+jr 'group(_["id"])'
 ```
 
 ### min(expr)
@@ -86,9 +90,6 @@ Computes the minimum, maximum, and summation value across rows.
 ```sh
 jr '_["latency"] >> min(_)'
 ```
-
-`max(value)`
-Computes the maximum value across rows.
 
 ```sh
 jr '_["latency"] >> max(_)'
