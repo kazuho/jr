@@ -83,7 +83,7 @@ stdout, stderr, status = run_jr('select(_["hello"] == 123)', input_hello)
 assert_success(status, stderr, "select-only hello")
 assert_equal(['{"hello":123}'], lines(stdout), "select-only hello output")
 
-stdout, stderr, status = run_jr('select(_["hello"] == 123) >> _["hello"]', input_hello, "--dump-stages")
+stdout, stderr, status = run_jr('select(_["hello"] == 123) >> _["hello"]', input_hello, "-v")
 assert_success(status, stderr, "dump stages")
 assert_equal(%w[123], lines(stdout), "dump stages output")
 assert_includes(stderr, "stage[0] kind=select")
