@@ -30,6 +30,12 @@ def assert_failure(status, msg = nil)
   raise "expected failure#{msg ? " (#{msg})" : ""}, got success"
 end
 
+def assert_float_close(expected, actual, epsilon = 1e-9, msg = nil)
+  return if (expected - actual).abs <= epsilon
+
+  raise "assert_float_close failed#{msg ? " (#{msg})" : ""}\nexpected: #{expected}\nactual: #{actual}\nepsilon: #{epsilon}"
+end
+
 def lines(str)
   str.lines.map(&:strip).reject(&:empty?)
 end
@@ -165,6 +171,14 @@ stdout, stderr, status = run_jr('select(_["x"] > 10) >> sum(_["foo"])', input_su
 assert_success(status, stderr, "select + sum")
 assert_equal(%w[9], lines(stdout), "select + sum output")
 
+stdout, stderr, status = run_jr('average(_["foo"])', input_sum)
+assert_success(status, stderr, "average")
+assert_float_close(2.5, lines(stdout).first.to_f, 1e-12, "average output")
+
+stdout, stderr, status = run_jr('stdev(_["foo"])', input_sum)
+assert_success(status, stderr, "stdev")
+assert_float_close(1.118033988749895, lines(stdout).first.to_f, 1e-12, "stdev output")
+
 stdout, stderr, status = run_jr('_["foo"] >> sum(_ * 2)', input_sum)
 assert_success(status, stderr, "extract + sum")
 assert_equal(%w[20], lines(stdout), "extract + sum output")
@@ -172,6 +186,14 @@ assert_equal(%w[20], lines(stdout), "extract + sum output")
 stdout, stderr, status = run_jr('select(_["x"] > 1000) >> sum(_["foo"])', input_sum)
 assert_success(status, stderr, "sum no matches")
 assert_equal(%w[0], lines(stdout), "sum no matches output")
+
+stdout, stderr, status = run_jr('select(_["x"] > 1000) >> average(_["foo"])', input_sum)
+assert_success(status, stderr, "average no matches")
+assert_equal(%w[null], lines(stdout), "average no matches output")
+
+stdout, stderr, status = run_jr('select(_["x"] > 1000) >> stdev(_["foo"])', input_sum)
+assert_success(status, stderr, "stdev no matches")
+assert_equal(%w[null], lines(stdout), "stdev no matches output")
 
 stdout, stderr, status = run_jr('select(_["x"] > 1000) >> min(_["foo"])', input_sum)
 assert_success(status, stderr, "min no matches")
