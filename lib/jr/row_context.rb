@@ -11,15 +11,7 @@ module Jr
       self
     end
 
-    def [](key)
-      @obj[key]
-    end
-
     def _
-      @obj
-    end
-
-    def __row__
       @obj
     end
   end

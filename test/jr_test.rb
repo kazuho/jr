@@ -1,8 +1,6 @@
 # frozen_string_literal: true
 
 require "open3"
-require "json"
-require "tmpdir"
 
 def run_jr(expr, input, *opts)
   Open3.capture3("./exe/jr", *opts, expr, stdin_data: input)
