@@ -44,17 +44,14 @@ module Jr
 
     define_reducer(:min, initial: nil) { |acc, v| acc.nil? || v < acc ? v : acc }
     define_reducer(:max, initial: nil) { |acc, v| acc.nil? || v > acc ? v : acc }
-
-    def average(value)
-      create_reducer(
-        value,
-        initial: [0.0, 0],
-        finish: ->((sum, count)) { count.zero? ? nil : (sum / count) }
-      ) do |acc, v|
-        acc[0] += v
-        acc[1] += 1
-        acc
-      end
+    define_reducer(
+      :average,
+      initial: -> { [0.0, 0] },
+      finish: ->((sum, count)) { count.zero? ? nil : (sum / count) }
+    ) do |acc, v|
+      acc[0] += v
+      acc[1] += 1
+      acc
     end
 
     def stdev(value, sample: false)
@@ -104,9 +101,7 @@ module Jr
       end
     end
 
-    def group(value = @obj)
-      create_reducer(value, initial: []) { |acc, v| acc << v }
-    end
+    define_reducer(:group, initial: -> { [] }) { |acc, v| acc << v }
 
     def percentile(value, percentage)
       percentages = percentage.is_a?(Array) ? percentage : [percentage]
