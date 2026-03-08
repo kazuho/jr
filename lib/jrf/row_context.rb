@@ -47,6 +47,10 @@ module Jrf
       { value: value, initial: initial, step: ->(acc, v) { acc + v } }
     end
 
+    define_reducer(:count) do |_ctx, block: nil|
+      { value: nil, initial: 0, step: ->(acc, _v) { acc + 1 } }
+    end
+
     define_reducer(:min) do |_ctx, value, block: nil|
       { value: value, initial: nil, step: ->(acc, v) { acc.nil? || v < acc ? v : acc } }
     end

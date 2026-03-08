@@ -173,6 +173,10 @@ stdout, stderr, status = run_jrf('sum(_["foo"])', input_sum)
 assert_success(status, stderr, "sum only")
 assert_equal(%w[10], lines(stdout), "sum output")
 
+stdout, stderr, status = run_jrf('count()', input_sum)
+assert_success(status, stderr, "count only")
+assert_equal(%w[4], lines(stdout), "count output")
+
 stdout, stderr, status = run_jrf('min(_["foo"])', input_sum)
 assert_success(status, stderr, "min only")
 assert_equal(%w[1], lines(stdout), "min output")
@@ -200,6 +204,10 @@ assert_equal(%w[20], lines(stdout), "extract + sum output")
 stdout, stderr, status = run_jrf('select(_["x"] > 1000) >> sum(_["foo"])', input_sum)
 assert_success(status, stderr, "sum no matches")
 assert_equal(%w[0], lines(stdout), "sum no matches output")
+
+stdout, stderr, status = run_jrf('select(_["x"] > 1000) >> count()', input_sum)
+assert_success(status, stderr, "count no matches")
+assert_equal(%w[0], lines(stdout), "count no matches output")
 
 stdout, stderr, status = run_jrf('select(_["x"] > 1000) >> average(_["foo"])', input_sum)
 assert_success(status, stderr, "average no matches")
