@@ -6,7 +6,7 @@ require_relative "pipeline_parser"
 require_relative "reducers"
 require_relative "row_context"
 
-module Jr
+module Jrf
   class Runner
     class ProbeValue
       def [](key)
@@ -89,7 +89,7 @@ module Jr
       value = eval_stage(stage, input, ctx)
       if value.equal?(Control::DROPPED)
         Control::DROPPED
-      elsif ctx.__jr_reducer_called?
+      elsif ctx.__jrf_reducer_called?
         stage[:reducer_template] ||= value
         Control::DROPPED
       else
@@ -99,7 +99,7 @@ module Jr
 
     def eval_stage(stage, input, ctx)
       ctx.reset(input)
-      ctx.__jr_begin_stage__(stage, probing: input.equal?(PROBE_VALUE))
+      ctx.__jrf_begin_stage__(stage, probing: input.equal?(PROBE_VALUE))
       ctx.public_send(stage[:method_name])
     end
 
@@ -132,7 +132,7 @@ module Jr
       compiled = []
 
       stages.each_with_index do |stage, i|
-        method_name = :"__jr_stage_#{i}"
+        method_name = :"__jrf_stage_#{i}"
         mod.module_eval("def #{method_name}; #{stage[:src]}; end", "(jrf stage #{i})", 1)
         compiled << stage.merge(method_name: method_name)
       end
@@ -153,7 +153,7 @@ module Jr
       stages.each do |stage|
         begin
           value = eval_stage(stage, PROBE_VALUE, ctx)
-          stage[:reducer_template] ||= value if ctx.__jr_reducer_called?
+          stage[:reducer_template] ||= value if ctx.__jrf_reducer_called?
         rescue StandardError
           # Ignore probe-time errors; reducer will be created on first runtime event.
         end

@@ -2,6 +2,6 @@
 # frozen_string_literal: true
 
 $LOAD_PATH.unshift(File.expand_path("../lib", __dir__))
-require "jr"
+require "jrf"
 
-exit Jr::CLI.run(ARGV)
+exit Jrf::CLI.run(ARGV)

@@ -2,7 +2,7 @@
 
 require_relative "runner"
 
-module Jr
+module Jrf
   class CLI
     def self.run(argv = ARGV, input: ARGF, out: $stdout, err: $stderr)
       verbose = false
