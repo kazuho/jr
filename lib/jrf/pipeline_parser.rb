@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-module Jr
+module Jrf
   class PipelineParser
     def initialize(source)
       @source = source.to_s
@@ -19,7 +19,7 @@ module Jr
         {
           kind: :select,
           original: stage,
-          src: "(#{parse_select!(stage)}) ? _ : ::Jr::Control::DROPPED"
+          src: "(#{parse_select!(stage)}) ? _ : ::Jrf::Control::DROPPED"
         }
       else
         reject_unsupported_stage!(stage)

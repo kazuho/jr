@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-module Jr
+module Jrf
   module Control
     Flat = Struct.new(:value)
     DROPPED = Object.new.freeze

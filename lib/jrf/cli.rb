@@ -2,7 +2,7 @@
 
 require_relative "runner"
 
-module Jr
+module Jrf
   class CLI
     def self.run(argv = ARGV, input: ARGF, out: $stdout, err: $stderr)
       verbose = false
@@ -14,13 +14,13 @@ module Jr
           argv.shift
         else
           err.puts "unknown option: #{argv.first}"
-          err.puts "usage: jr [-v] 'EXPR'"
+          err.puts "usage: jrf [-v] 'EXPR'"
           return 1
         end
       end
 
       if argv.empty?
-        err.puts "usage: jr [-v] 'EXPR'"
+        err.puts "usage: jrf [-v] 'EXPR'"
         return 1
       end
 

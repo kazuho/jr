@@ -2,7 +2,7 @@
 require_relative "control"
 require_relative "reducers"
 
-module Jr
+module Jrf
   class RowContext
     MISSING = Object.new
     ReducerToken = Struct.new(:index)
@@ -24,7 +24,7 @@ module Jr
 
     def initialize(obj = nil)
       @obj = obj
-      @__jr_stage = nil
+      @__jrf_stage = nil
     end
 
     def reset(obj)
@@ -149,29 +149,29 @@ module Jr
       create_reducer(@obj, initial: initial, &block)
     end
 
-    def __jr_begin_stage__(stage, probing: false)
-      @__jr_stage = stage
+    def __jrf_begin_stage__(stage, probing: false)
+      @__jrf_stage = stage
       stage[:reducer_cursor] = 0
       stage[:reducer_called] = false
       stage[:reducer_probing] = probing
     end
 
-    def __jr_reducer_called?
-      @__jr_stage && @__jr_stage[:reducer_called]
+    def __jrf_reducer_called?
+      @__jrf_stage && @__jrf_stage[:reducer_called]
     end
 
   private
 
     def create_reducer(value, initial:, emit_many: false, finish: nil, &step_fn)
-      raise "internal error: reducer used outside stage context" unless @__jr_stage
+      raise "internal error: reducer used outside stage context" unless @__jrf_stage
 
-      reducers = (@__jr_stage[:reducers] ||= [])
-      idx = @__jr_stage[:reducer_cursor] || 0
+      reducers = (@__jrf_stage[:reducers] ||= [])
+      idx = @__jrf_stage[:reducer_cursor] || 0
       reducers[idx] ||= Reducers.reduce(initial, finish: finish, &step_fn)
-      reducers[idx].step(value) unless @__jr_stage[:reducer_probing]
-      @__jr_stage[:reducer_cursor] = idx + 1
-      @__jr_stage[:reducer_called] = true
-      @__jr_stage[:reducer_emit_many] = emit_many if @__jr_stage[:reducer_emit_many].nil?
+      reducers[idx].step(value) unless @__jrf_stage[:reducer_probing]
+      @__jrf_stage[:reducer_cursor] = idx + 1
+      @__jrf_stage[:reducer_called] = true
+      @__jrf_stage[:reducer_emit_many] = emit_many if @__jrf_stage[:reducer_emit_many].nil?
       ReducerToken.new(idx)
     end
 
