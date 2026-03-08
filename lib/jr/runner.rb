@@ -30,10 +30,10 @@ module Jr
       @err = err
     end
 
-    def run(expression, dump_stages: false)
+    def run(expression, verbose: false)
       parsed = PipelineParser.new(expression).parse
       stages = parsed[:stages]
-      dump_stages(stages) if dump_stages
+      dump_stages(stages) if verbose
 
       ctx = RowContext.new
       compiled = compile_stages(stages, ctx)

@@ -5,27 +5,27 @@ require_relative "runner"
 module Jr
   class CLI
     def self.run(argv = ARGV, input: ARGF, out: $stdout, err: $stderr)
-      dump = false
+      verbose = false
 
-      while argv.first&.start_with?("--")
+      while argv.first&.start_with?("-")
         case argv.first
-        when "--dump-stages"
-          dump = true
+        when "-v"
+          verbose = true
           argv.shift
         else
           err.puts "unknown option: #{argv.first}"
-          err.puts "usage: jr [--dump-stages] 'EXPR'"
+          err.puts "usage: jr [-v] 'EXPR'"
           return 1
         end
       end
 
       if argv.empty?
-        err.puts "usage: jr [--dump-stages] 'EXPR'"
+        err.puts "usage: jr [-v] 'EXPR'"
         return 1
       end
 
       expression = argv.shift
-      Runner.new(input: input, out: out, err: err).run(expression, dump_stages: dump)
+      Runner.new(input: input, out: out, err: err).run(expression, verbose: verbose)
       0
     end
   end
