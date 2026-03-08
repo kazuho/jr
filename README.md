@@ -81,19 +81,41 @@ jr '_["id"] >> group'
 jr 'group(_["id"])'
 ```
 
-### min(expr)
-### max(expr)
-### sum(expr)
+### average(expr)
 
-Computes the minimum, maximum, and summation value across rows.
+Computes the average value across rows.
+
+```sh
+jr '_["latency"] >> average(_)'
+```
+
+### min(expr)
+
+Computes the minimum value across rows.
 
 ```sh
 jr '_["latency"] >> min(_)'
 ```
 
+### max(expr)
+
+Computes the maximum value across rows.
+
 ```sh
 jr '_["latency"] >> max(_)'
 ```
+
+### stdev(expr)
+
+Computes the standard deviation across rows.
+
+```sh
+jr '_["latency"] >> stdev(_)'
+```
+
+### sum(expr)
+
+Computes the sum across rows.
 
 ```sh
 jr '_["price"] * _["unit"] >> sum(_)'

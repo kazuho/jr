@@ -36,6 +36,43 @@ module Jr
       __jr_register_reducer__(value: value, initial: nil) { |acc, v| acc.nil? || v > acc ? v : acc }
     end
 
+    def average(value)
+      __jr_register_reducer__(
+        value: value,
+        initial: [0.0, 0],
+        finish: ->((sum, count)) { count.zero? ? nil : (sum / count) }
+      ) do |acc, v|
+        acc[0] += v
+        acc[1] += 1
+        acc
+      end
+    end
+
+    def stdev(value, sample: false)
+      __jr_register_reducer__(
+        value: value,
+        initial: [0, 0.0, 0.0],
+        finish: ->((count, mean, m2)) {
+          return nil if count.zero?
+          return nil if sample && count < 2
+
+          denom = sample ? (count - 1) : count
+          Math.sqrt(m2 / denom)
+        }
+      ) do |acc, x|
+        count, mean, m2 = acc
+        count += 1
+        delta = x - mean
+        mean += delta / count
+        delta2 = x - mean
+        m2 += delta * delta2
+        acc[0] = count
+        acc[1] = mean
+        acc[2] = m2
+        acc
+      end
+    end
+
     def sort(key = @obj, &compare)
       if compare
         __jr_register_reducer__(
