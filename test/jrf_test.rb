@@ -96,7 +96,7 @@ assert_includes(stderr, 'ruby: _["hello"]')
 stdout, stderr, status = Open3.capture3("./exe/jrf", "--help")
 assert_success(status, stderr, "help option")
 assert_includes(stdout, "usage: jrf [-v] [--help] 'EXPR'")
-assert_includes(stdout, "NDJSON transformer using Ruby expressions.")
+assert_includes(stdout, "JSON filter with the power and speed of Ruby.")
 assert_equal([], lines(stderr), "help stderr output")
 
 stdout, stderr, status = run_jrf('select(_["hello"] == 123) >> _["hello"]', input_hello, "--verbose")

@@ -9,7 +9,7 @@ module Jrf
     HELP_TEXT = <<~'TEXT'
       usage: jrf [-v] [--help] 'EXPR'
 
-      NDJSON transformer using Ruby expressions.
+      JSON filter with the power and speed of Ruby.
 
       Options:
         -v, --verbose  print compiled stage Ruby expressions
