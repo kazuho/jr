@@ -9,21 +9,20 @@ module Jr
     def parse
       stages = split_top_level_pipeline(@source).map(&:strip).reject(&:empty?)
       raise ArgumentError, "empty expression" if stages.empty?
-
       { stages: stages.map { |stage| parse_stage!(stage) } }
     end
 
     private
 
     def parse_stage!(stage)
-      reject_unsupported_stage!(stage)
       if select_stage?(stage)
         {
           kind: :select,
           original: stage,
-          src: parse_select!(stage)
+          src: "__jr_select__(#{parse_select!(stage)})"
         }
       else
+        reject_unsupported_stage!(stage)
         {
           kind: :extract,
           original: stage,
@@ -54,7 +53,6 @@ module Jr
 
     def reject_unsupported_stage!(stage)
       raise ArgumentError, "flat is not supported yet" if stage == "flat"
-      raise ArgumentError, "sum(...) is not supported yet" if /\Asum\s*\(/.match?(stage)
     end
 
     def split_top_level_pipeline(source)

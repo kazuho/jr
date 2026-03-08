@@ -82,7 +82,7 @@ assert_success(status, stderr, "dump stages")
 assert_equal(%w[123], lines(stdout), "dump stages output")
 assert_includes(stderr, "stage[0] kind=select")
 assert_includes(stderr, 'original: select(_["hello"] == 123)')
-assert_includes(stderr, 'ruby: _["hello"] == 123')
+assert_includes(stderr, 'ruby: __jr_select__(_["hello"] == 123)')
 assert_includes(stderr, "stage[1] kind=extract")
 assert_includes(stderr, 'original: _["hello"]')
 assert_includes(stderr, 'ruby: _["hello"]')
@@ -100,9 +100,64 @@ stdout, stderr, status = run_jr('_["foo"] >> flat', input)
 assert_failure(status, "flat unsupported")
 assert_includes(stderr, "flat is not supported yet")
 
-stdout, stderr, status = run_jr('sum(_["foo"])', input)
-assert_failure(status, "sum unsupported")
-assert_includes(stderr, "sum(...) is not supported yet")
+input_sum = <<~NDJSON
+  {"foo":1,"x":5}
+  {"foo":2,"x":11}
+  {"foo":3,"x":50}
+  {"foo":4,"x":70}
+NDJSON
+
+stdout, stderr, status = run_jr('sum(_["foo"])', input_sum)
+assert_success(status, stderr, "sum only")
+assert_equal(%w[10], lines(stdout), "sum output")
+
+stdout, stderr, status = run_jr('min(_["foo"])', input_sum)
+assert_success(status, stderr, "min only")
+assert_equal(%w[1], lines(stdout), "min output")
+
+stdout, stderr, status = run_jr('max(_["foo"])', input_sum)
+assert_success(status, stderr, "max only")
+assert_equal(%w[4], lines(stdout), "max output")
+
+stdout, stderr, status = run_jr('select(_["x"] > 10) >> sum(_["foo"])', input_sum)
+assert_success(status, stderr, "select + sum")
+assert_equal(%w[9], lines(stdout), "select + sum output")
+
+stdout, stderr, status = run_jr('_["foo"] >> sum(_ * 2)', input_sum)
+assert_success(status, stderr, "extract + sum")
+assert_equal(%w[20], lines(stdout), "extract + sum output")
+
+stdout, stderr, status = run_jr('select(_["x"] > 1000) >> sum(_["foo"])', input_sum)
+assert_success(status, stderr, "sum no matches")
+assert_equal(%w[0], lines(stdout), "sum no matches output")
+
+stdout, stderr, status = run_jr('select(_["x"] > 1000) >> min(_["foo"])', input_sum)
+assert_success(status, stderr, "min no matches")
+assert_equal(%w[null], lines(stdout), "min no matches output")
+
+stdout, stderr, status = run_jr('select(_["x"] > 1000) >> max(_["foo"])', input_sum)
+assert_success(status, stderr, "max no matches")
+assert_equal(%w[null], lines(stdout), "max no matches output")
+
+stdout, stderr, status = run_jr('sum(_["foo"]) >> _ + 1', input_sum)
+assert_success(status, stderr, "reduce in middle")
+assert_equal(%w[11], lines(stdout), "reduce in middle output")
+
+stdout, stderr, status = run_jr('select(_["x"] > 10) >> _["foo"] >> sum(_ * 2) >> select(_ > 10) >> _ + 1', input_sum)
+assert_success(status, stderr, "reduce mixed with select/extract")
+assert_equal(%w[19], lines(stdout), "reduce mixed output")
+
+stdout, stderr, status = run_jr('_["foo"] >> sum(_) >> _ * 10 >> sum(_)', input_sum)
+assert_success(status, stderr, "multiple reducers")
+assert_equal(%w[100], lines(stdout), "multiple reducers output")
+
+stdout, stderr, status = run_jr('_["foo"] >> min(_) >> _ * 10 >> max(_)', input_sum)
+assert_success(status, stderr, "min/max mixed reducers")
+assert_equal(%w[10], lines(stdout), "min/max mixed reducers output")
+
+stdout, stderr, status = run_jr('sum(_["foo"]) >> select(_ > 100)', input_sum)
+assert_success(status, stderr, "post-reduce select drop")
+assert_equal([], lines(stdout), "post-reduce select drop output")
 
 stdout, stderr, status = run_jr('select(_["x"] > ) >> _["foo"]', "")
 assert_failure(status, "syntax error should fail before row loop")

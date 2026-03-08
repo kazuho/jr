@@ -1,11 +1,29 @@
 # frozen_string_literal: true
 
 require "json"
+require_relative "control"
 require_relative "pipeline_parser"
+require_relative "reducers"
 require_relative "row_context"
 
 module Jr
   class Runner
+    class ProbeValue
+      def [](key)
+        self
+      end
+
+      def method_missing(name, *args, &block)
+        self
+      end
+
+      def respond_to_missing?(name, include_private = false)
+        true
+      end
+    end
+
+    PROBE_VALUE = ProbeValue.new
+
     def initialize(input: ARGF, out: $stdout, err: $stderr)
       @input = input
       @out = out
@@ -19,36 +37,73 @@ module Jr
 
       ctx = RowContext.new
       compiled = compile_stages(stages, ctx)
+      initialize_reducers(compiled, ctx)
 
       @input.each_line do |line|
         line = line.strip
         next if line.empty?
 
-        current = JSON.parse(line)
-        dropped = false
-
-        compiled.each do |stage|
-          ctx.reset(current)
-          case stage[:kind]
-          when :select
-            unless ctx.public_send(stage[:method_name])
-              dropped = true
-              break
-            end
-          when :extract
-            current = ctx.public_send(stage[:method_name])
-          else
-            raise "internal error: unknown stage kind #{stage[:kind].inspect}"
-          end
-        end
-
-        next if dropped
-
-        @out.puts JSON.generate(current)
+        process_value(JSON.parse(line), compiled, ctx)
       end
+
+      flush_reducers(compiled, ctx)
     end
 
     private
+
+    def process_value(input, stages, ctx)
+      current = input
+      i = 0
+      while i < stages.size
+        stage = stages[i]
+        current = apply_stage(stage, current, ctx)
+        return if current.equal?(Control::DROPPED)
+
+        i += 1
+      end
+
+      @out.puts JSON.generate(current)
+    end
+
+    def apply_stage(stage, input, ctx)
+      value = eval_stage(stage, input, ctx)
+      if value.equal?(Control::DROPPED)
+        Control::DROPPED
+      elsif value.equal?(Control::KEEP_INPUT)
+        input
+      elsif reducer_event?(value)
+        stage[:reducer] ||= value.factory.call
+        stage[:reducer_factory] ||= value.factory
+        stage[:reducer].step(value.value)
+        Control::DROPPED
+      else
+        value
+      end
+    end
+
+    def eval_stage(stage, input, ctx)
+      ctx.reset(input)
+      ctx.public_send(stage[:method_name])
+    end
+
+    def reducer_event?(value)
+      value.is_a?(Reducers::Event)
+    end
+
+    def flush_reducers(stages, ctx)
+      tail = stages
+      loop do
+        tail = tail.drop_while { |stage| !reducer_stage?(stage) }
+        break if tail.empty?
+
+        stage = tail.first
+        stage[:reducer] ||= stage[:reducer_factory]&.call
+        break unless stage[:reducer]
+
+        process_value(stage[:reducer].finish, tail.drop(1), ctx)
+        tail = tail.drop(1)
+      end
+    end
 
     def compile_stages(stages, ctx)
       mod = Module.new
@@ -70,6 +125,24 @@ module Jr
         @err.puts "  original: #{stage[:original]}"
         @err.puts "  ruby: #{stage[:src]}"
       end
+    end
+
+    def initialize_reducers(stages, ctx)
+      stages.each_with_index do |stage, i|
+        begin
+          value = eval_stage(stage, PROBE_VALUE, ctx)
+          if reducer_event?(value)
+            stage[:reducer_factory] = value.factory
+            stage[:reducer] = value.factory.call
+          end
+        rescue StandardError
+          # Ignore probe-time errors; reducer will be created on first runtime event.
+        end
+      end
+    end
+
+    def reducer_stage?(stage)
+      stage[:reducer] || stage[:reducer_factory]
     end
   end
 end
