@@ -129,6 +129,15 @@ Computes the sum across rows.
 jrf '_["price"] * _["unit"] >> sum(_)'
 ```
 
+### count()
+
+Counts rows.
+
+```sh
+jrf 'count()'
+jrf 'select(_["status"] == 200) >> count()'
+```
+
 ### percentile(expr, 0.95)
 ### percentile(expr, [0.1, 0.5, 0.9])
 
