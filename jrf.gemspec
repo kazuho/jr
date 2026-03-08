@@ -8,8 +8,8 @@ Gem::Specification.new do |spec|
   spec.authors = ["kazuho"]
   spec.email = ["n/a@example.com"]
 
-  spec.summary = "Small NDJSON transformer with Ruby expressions"
-  spec.description = "A small, lightweight NDJSON transformer with Ruby-like expressions."
+  spec.summary = "JSON filter with the power and speed of Ruby"
+  spec.description = "A JSON filter for NDJSON that uses Ruby expressions for transforms, selection, and aggregation."
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.0"
 

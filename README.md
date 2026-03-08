@@ -1,4 +1,4 @@
-# jrf - a JSON Filter with the Power and Speed of Ruby
+# jrf - a JSON filter with the power and speed of Ruby
 
 ## SYNOPSIS
 
