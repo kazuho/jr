@@ -53,7 +53,7 @@ exe/jrf 'min(_["tid"])' < large.ldjson  1.37s user 0.15s system 99% cpu 1.531 to
 
 - By default, input is NDJSON (one JSON value per line); empty lines are skipped.
 - `--lax` accepts a stream of JSON texts separated by whitespace.
-- `--lax` also accepts ASCII RS (`0x1e`) as a separator (JSON-SEQ-style framing).
+- `--lax` supports JSON-SEQ (`application/json-seq`) framing with ASCII RS (`0x1e`) separators.
 - Output is NDJSON (one compact JSON value per line).
 
 ## BUILT-IN FUNCTIONS
