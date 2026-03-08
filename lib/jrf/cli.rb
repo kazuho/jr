@@ -12,7 +12,7 @@ module Jrf
       JSON filter with the power and speed of Ruby.
 
       Options:
-        -v, --verbose  print compiled stage Ruby expressions
+        -v, --verbose  print parsed stage expressions
         --lax          allow multiline JSON texts; split inputs by whitespace (also detects JSON-SEQ RS 0x1e)
         -h, --help     show this help and exit
 
