@@ -210,6 +210,10 @@ stdout, stderr, status = run_jrf('_["foo"] >> sum(_ * 2)', input_sum)
 assert_success(status, stderr, "extract + sum")
 assert_equal(%w[20], lines(stdout), "extract + sum output")
 
+stdout, stderr, status = run_jrf('sum(2 * _["foo"])', input_sum)
+assert_success(status, stderr, "sum with literal on left")
+assert_equal(%w[20], lines(stdout), "sum with literal on left output")
+
 stdout, stderr, status = run_jrf('select(_["x"] > 1000) >> sum(_["foo"])', input_sum)
 assert_success(status, stderr, "sum no matches")
 assert_equal([], lines(stdout), "sum no matches output")
