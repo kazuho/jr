@@ -194,6 +194,10 @@ stdout, stderr, status = run_jrf('select(_["x"] > 10) >> sum(_["foo"])', input_s
 assert_success(status, stderr, "select + sum")
 assert_equal(%w[9], lines(stdout), "select + sum output")
 
+stdout, stderr, status = run_jrf('{total: sum(_["foo"]), n: count()}', input_sum)
+assert_success(status, stderr, "structured reducer result")
+assert_equal(['{"total":10,"n":4}'], lines(stdout), "structured reducer result output")
+
 stdout, stderr, status = run_jrf('average(_["foo"])', input_sum)
 assert_success(status, stderr, "average")
 assert_float_close(2.5, lines(stdout).first.to_f, 1e-12, "average output")
@@ -208,31 +212,31 @@ assert_equal(%w[20], lines(stdout), "extract + sum output")
 
 stdout, stderr, status = run_jrf('select(_["x"] > 1000) >> sum(_["foo"])', input_sum)
 assert_success(status, stderr, "sum no matches")
-assert_equal(%w[0], lines(stdout), "sum no matches output")
+assert_equal([], lines(stdout), "sum no matches output")
 
 stdout, stderr, status = run_jrf('select(_["x"] > 1000) >> count()', input_sum)
 assert_success(status, stderr, "count no matches")
-assert_equal(%w[0], lines(stdout), "count no matches output")
+assert_equal([], lines(stdout), "count no matches output")
 
 stdout, stderr, status = run_jrf('select(_["x"] > 1000) >> count(_["foo"])', input_sum)
 assert_success(status, stderr, "count(expr) no matches")
-assert_equal(%w[0], lines(stdout), "count(expr) no matches output")
+assert_equal([], lines(stdout), "count(expr) no matches output")
 
 stdout, stderr, status = run_jrf('select(_["x"] > 1000) >> average(_["foo"])', input_sum)
 assert_success(status, stderr, "average no matches")
-assert_equal(%w[null], lines(stdout), "average no matches output")
+assert_equal([], lines(stdout), "average no matches output")
 
 stdout, stderr, status = run_jrf('select(_["x"] > 1000) >> stdev(_["foo"])', input_sum)
 assert_success(status, stderr, "stdev no matches")
-assert_equal(%w[null], lines(stdout), "stdev no matches output")
+assert_equal([], lines(stdout), "stdev no matches output")
 
 stdout, stderr, status = run_jrf('select(_["x"] > 1000) >> min(_["foo"])', input_sum)
 assert_success(status, stderr, "min no matches")
-assert_equal(%w[null], lines(stdout), "min no matches output")
+assert_equal([], lines(stdout), "min no matches output")
 
 stdout, stderr, status = run_jrf('select(_["x"] > 1000) >> max(_["foo"])', input_sum)
 assert_success(status, stderr, "max no matches")
-assert_equal(%w[null], lines(stdout), "max no matches output")
+assert_equal([], lines(stdout), "max no matches output")
 
 stdout, stderr, status = run_jrf('sum(_["foo"]) >> _ + 1', input_sum)
 assert_success(status, stderr, "reduce in middle")
@@ -274,7 +278,7 @@ assert_equal([], lines(stdout), "sort no matches output")
 
 stdout, stderr, status = run_jrf('select(_["x"] > 1000) >> _["foo"] >> group', input_sum)
 assert_success(status, stderr, "group no matches")
-assert_equal(['[]'], lines(stdout), "group no matches output")
+assert_equal([], lines(stdout), "group no matches output")
 
 input_group_multi = <<~NDJSON
   {"x":1,"y":"a"}
@@ -288,7 +292,7 @@ assert_equal(['{"a":[1,2,3],"b":["a","b","c"]}'], lines(stdout), "group in hash 
 
 stdout, stderr, status = run_jrf('select(_["x"] > 1000) >> {a: group(_["x"]), b: group(_["y"])}', input_group_multi)
 assert_success(status, stderr, "group in hash no matches")
-assert_equal(['{"a":[],"b":[]}'], lines(stdout), "group in hash no-match output")
+assert_equal([], lines(stdout), "group in hash no-match output")
 
 stdout, stderr, status = run_jrf('percentile(_["foo"], 0.50)', input_sum)
 assert_success(status, stderr, "single percentile")
@@ -561,15 +565,28 @@ assert_equal(['{"a":12,"b":66}'], lines(stdout), "map_values ambient _ output")
 
 stdout, stderr, status = run_jrf('select(false) >> map { |x| sum(x) }', input_map)
 assert_success(status, stderr, "map no matches")
-assert_equal(['[]'], lines(stdout), "map no matches output")
+assert_equal([], lines(stdout), "map no matches output")
 
 stdout, stderr, status = run_jrf('select(false) >> map_values { |v| sum(v) }', input_map_values)
 assert_success(status, stderr, "map_values no matches")
-assert_equal(['{}'], lines(stdout), "map_values no matches output")
+assert_equal([], lines(stdout), "map_values no matches output")
 
 stdout, stderr, status = run_jrf('map_values { |v| sum(v) } >> map_values { |v| v * 10 }', input_map_values)
 assert_success(status, stderr, "map_values piped to map_values passthrough")
 assert_equal(['{"a":60,"b":600}'], lines(stdout), "map_values piped output")
+
+# map/map_values transformation (no reducers)
+stdout, stderr, status = run_jrf('_["values"] >> map { |x| x + 1 }', input_map)
+assert_success(status, stderr, "map transform")
+assert_equal(['[2,11,101]', '[3,21,201]', '[4,31,301]'], lines(stdout), "map transform output")
+
+stdout, stderr, status = run_jrf('map_values { |v| v * 2 }', input_map_values)
+assert_success(status, stderr, "map_values transform")
+assert_equal(['{"a":2,"b":20}', '{"a":4,"b":40}', '{"a":6,"b":60}'], lines(stdout), "map_values transform output")
+
+stdout, stderr, status = run_jrf('_["values"] >> map { |x| x + 1 } >> map { |x| x * 10 }', input_map)
+assert_success(status, stderr, "chained map transforms")
+assert_equal(['[20,110,1010]', '[30,210,2010]', '[40,310,3010]'], lines(stdout), "chained map transforms output")
 
 input_gb = <<~NDJSON
   {"status":200,"path":"/a","latency":10}
@@ -613,7 +630,7 @@ assert_equal(['{"200":{"total":60,"n":3},"404":{"total":50,"n":1}}'], lines(stdo
 
 stdout, stderr, status = run_jrf('select(false) >> group_by(_["status"]) { count() }', input_gb)
 assert_success(status, stderr, "group_by no matches")
-assert_equal(['{}'], lines(stdout), "group_by no matches output")
+assert_equal([], lines(stdout), "group_by no matches output")
 
 stdout, stderr, status = run_jrf('group_by(_["status"]) { count() } >> _[200]', input_gb)
 assert_success(status, stderr, "group_by then extract")
