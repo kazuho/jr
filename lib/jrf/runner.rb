@@ -11,11 +11,12 @@ module Jrf
   class Runner
     RS_CHAR = "\x1e"
 
-    def initialize(input: ARGF, out: $stdout, err: $stderr, lax: false)
+    def initialize(input: ARGF, out: $stdout, err: $stderr, lax: false, pretty: false)
       @input = input
       @out = out
       @err = err
       @lax = lax
+      @pretty = pretty
     end
 
     def run(expression, verbose: false)
@@ -66,7 +67,9 @@ module Jrf
         current_values = next_values
       end
 
-      current_values.each { |value| @out.puts JSON.generate(value) }
+      current_values.each do |value|
+        @out.puts(@pretty ? JSON.pretty_generate(value) : JSON.generate(value))
+      end
     end
 
     def each_input_value
