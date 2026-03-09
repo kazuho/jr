@@ -92,9 +92,10 @@ assert_includes(stderr, 'stage[1]: _["hello"]')
 
 stdout, stderr, status = Open3.capture3("./exe/jrf", "--help")
 assert_success(status, stderr, "help option")
-assert_includes(stdout, "usage: jrf [-v] [--lax] [--help] 'STAGE >> STAGE >> ...'")
+assert_includes(stdout, "usage: jrf [-v] [--lax] [--pretty] [--help] 'STAGE >> STAGE >> ...'")
 assert_includes(stdout, "JSON filter with the power and speed of Ruby.")
 assert_includes(stdout, "--lax")
+assert_includes(stdout, "--pretty")
 assert_includes(stdout, "Pipeline:")
 assert_includes(stdout, "Connect stages with top-level >>.")
 assert_includes(stdout, "The current value in each stage is available as _.")
@@ -107,6 +108,21 @@ stdout, stderr, status = run_jrf('select(_["hello"] == 123) >> _["hello"]', inpu
 assert_success(status, stderr, "dump stages verbose alias")
 assert_equal(%w[123], lines(stdout), "dump stages verbose alias output")
 assert_includes(stderr, 'stage[0]: select(_["hello"] == 123)')
+
+stdout, stderr, status = run_jrf('_', input_hello, "--pretty")
+assert_success(status, stderr, "pretty output")
+assert_equal(
+  [
+    "{",
+    "\"hello\": 123",
+    "}",
+    "{",
+    "\"hello\": 456",
+    "}"
+  ],
+  lines(stdout),
+  "pretty output lines"
+)
 
 input_regex = <<~NDJSON
   {"foo":{"bar":"ok"},"x":50}

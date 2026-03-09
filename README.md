@@ -5,6 +5,7 @@
 ```sh
 jrf 'STAGE >> STAGE >> STAGE ...' < input.ndjson
 jrf --help
+jrf --pretty '_'
 
 # Extract
 jrf '_["foo"]'
@@ -57,6 +58,7 @@ exe/jrf 'min(_["tid"])' < large.ldjson  1.37s user 0.15s system 99% cpu 1.531 to
 - By default, input is NDJSON (one JSON value per line); empty lines are skipped.
 - `--lax` allows multiline JSON texts and parses whitespace-delimited streams (also detects RS `0x1e` for JSON-SEQ).
 - Output is NDJSON (one compact JSON value per line).
+- `--pretty` pretty-prints each output JSON value.
 
 ## BUILT-IN FUNCTIONS
 
