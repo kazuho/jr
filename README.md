@@ -214,7 +214,7 @@ jrf 'map_values { |v| sum(v) }'
 ```
 
 ### group_by(key_expr)
-### group_by(key_expr) { reducer }
+### group_by(key_expr) { ... }
 
 Groups rows by key expression and applies a reducer per group.
 
