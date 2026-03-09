@@ -22,9 +22,10 @@ module Jrf
       end
     end
 
-    def initialize(ctx, method_name, src: nil)
+    def initialize(ctx, method_name = nil, src: nil, block: nil)
       @ctx = ctx
       @method_name = method_name
+      @block = block
       @src = src
       @reducers = []
       @cursor = 0
@@ -37,7 +38,7 @@ module Jrf
       @ctx.reset(input)
       @cursor = 0
       @ctx.__jrf_current_stage = self
-      result = @ctx.public_send(@method_name)
+      result = @block ? @ctx.instance_eval(&@block) : @ctx.public_send(@method_name)
 
       if @mode.nil? && @reducers.any?
         @mode = :reducer
