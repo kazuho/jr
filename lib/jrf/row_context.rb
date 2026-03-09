@@ -163,6 +163,18 @@ module Jrf
       @__jrf_current_stage.allocate_reducer(@obj, initial: initial, &block)
     end
 
+    def map(&block)
+      raise ArgumentError, "map requires a block" unless block
+
+      @__jrf_current_stage.allocate_map(:array, @obj, &block)
+    end
+
+    def map_values(&block)
+      raise ArgumentError, "map_values requires a block" unless block
+
+      @__jrf_current_stage.allocate_map(:hash, @obj, &block)
+    end
+
     private
 
     def reducer_initial_value(initial)

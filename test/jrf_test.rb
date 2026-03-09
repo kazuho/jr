@@ -494,4 +494,72 @@ stdout, stderr, status = run_jrf('_["foo"] >> select(_["keep"]) >> _["bar"] >> s
 assert_success(status, stderr, "select/extract chain")
 assert_equal(%w[3], lines(stdout), "chain output")
 
+input_map = <<~NDJSON
+  {"values":[1,10,100]}
+  {"values":[2,20,200]}
+  {"values":[3,30,300]}
+NDJSON
+
+stdout, stderr, status = run_jrf('_["values"] >> map { |x| sum(x) }', input_map)
+assert_success(status, stderr, "map with sum")
+assert_equal(['[6,60,600]'], lines(stdout), "map with sum output")
+
+stdout, stderr, status = run_jrf('_["values"] >> map { |x| min(x) }', input_map)
+assert_success(status, stderr, "map with min")
+assert_equal(['[1,10,100]'], lines(stdout), "map with min output")
+
+stdout, stderr, status = run_jrf('_["values"] >> map { |x| max(x) }', input_map)
+assert_success(status, stderr, "map with max")
+assert_equal(['[3,30,300]'], lines(stdout), "map with max output")
+
+input_map_varying = <<~NDJSON
+  [1,10]
+  [2,20,200]
+  [3]
+NDJSON
+
+stdout, stderr, status = run_jrf('map { |x| sum(x) }', input_map_varying)
+assert_success(status, stderr, "map varying lengths")
+assert_equal(['[6,30,200]'], lines(stdout), "map varying lengths output")
+
+input_map_values = <<~NDJSON
+  {"a":1,"b":10}
+  {"a":2,"b":20}
+  {"a":3,"b":30}
+NDJSON
+
+stdout, stderr, status = run_jrf('map_values { |v| sum(v) }', input_map_values)
+assert_success(status, stderr, "map_values with sum")
+assert_equal(['{"a":6,"b":60}'], lines(stdout), "map_values with sum output")
+
+stdout, stderr, status = run_jrf('map_values { |v| min(v) }', input_map_values)
+assert_success(status, stderr, "map_values with min")
+assert_equal(['{"a":1,"b":10}'], lines(stdout), "map_values with min output")
+
+input_map_values_varying = <<~NDJSON
+  {"a":1}
+  {"a":2,"b":20}
+  {"a":3,"b":30}
+NDJSON
+
+stdout, stderr, status = run_jrf('map_values { |v| sum(v) }', input_map_values_varying)
+assert_success(status, stderr, "map_values varying keys")
+assert_equal(['{"a":6,"b":50}'], lines(stdout), "map_values varying keys output")
+
+stdout, stderr, status = run_jrf('map_values { |v| count(v) }', input_map_values)
+assert_success(status, stderr, "map_values with count")
+assert_equal(['{"a":3,"b":3}'], lines(stdout), "map_values with count output")
+
+stdout, stderr, status = run_jrf('select(false) >> map { |x| sum(x) }', input_map)
+assert_success(status, stderr, "map no matches")
+assert_equal(['[]'], lines(stdout), "map no matches output")
+
+stdout, stderr, status = run_jrf('select(false) >> map_values { |v| sum(v) }', input_map_values)
+assert_success(status, stderr, "map_values no matches")
+assert_equal(['{}'], lines(stdout), "map_values no matches output")
+
+stdout, stderr, status = run_jrf('map_values { |v| sum(v) } >> map_values { |v| v * 10 }', input_map_values)
+assert_success(status, stderr, "map_values piped to map_values passthrough")
+assert_equal(['{"a":60,"b":600}'], lines(stdout), "map_values piped output")
+
 puts "ok"
