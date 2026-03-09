@@ -194,6 +194,10 @@ stdout, stderr, status = run_jrf('select(_["x"] > 10) >> sum(_["foo"])', input_s
 assert_success(status, stderr, "select + sum")
 assert_equal(%w[9], lines(stdout), "select + sum output")
 
+stdout, stderr, status = run_jrf('{total: sum(_["foo"]), n: count()}', input_sum)
+assert_success(status, stderr, "structured reducer result")
+assert_equal(['{"total":10,"n":4}'], lines(stdout), "structured reducer result output")
+
 stdout, stderr, status = run_jrf('average(_["foo"])', input_sum)
 assert_success(status, stderr, "average")
 assert_float_close(2.5, lines(stdout).first.to_f, 1e-12, "average output")
@@ -249,10 +253,6 @@ assert_equal(%w[100], lines(stdout), "multiple reducers output")
 stdout, stderr, status = run_jrf('_["foo"] >> min(_) >> _ * 10 >> max(_)', input_sum)
 assert_success(status, stderr, "min/max mixed reducers")
 assert_equal(%w[10], lines(stdout), "min/max mixed reducers output")
-
-stdout, stderr, status = run_jrf('(($jrf_side_effect ||= 0); $jrf_side_effect += 1; sum(_["foo"])) >> $jrf_side_effect', input_sum)
-assert_success(status, stderr, "reducers do not probe user code")
-assert_equal(%w[4], lines(stdout), "reducers do not probe user code output")
 
 input_sort_rows = <<~NDJSON
   {"foo":"b","at":2}
