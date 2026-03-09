@@ -184,6 +184,7 @@ jrf 'sort { |a, b| b["at"] <=> a["at"] } >> _["id"]'
 
 Applies a reducer to each element of an Array, element-wise across rows.
 Each array position gets its own independent reducer instance.
+Inside the block, use the block argument (`x`) for the current element.
 
 ```sh
 jrf 'map { |x| sum(x) }'
@@ -196,6 +197,7 @@ jrf '_["values"] >> map { |x| min(x) }'
 
 Applies a reducer to each value of a Hash, key-wise across rows.
 Each key gets its own independent reducer instance.
+Inside the block, use the block argument (`v`) for the current hash value.
 
 ```sh
 jrf 'map_values { |v| sum(v) }'

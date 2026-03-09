@@ -523,6 +523,10 @@ stdout, stderr, status = run_jrf('map { |x| sum(x) }', input_map_varying)
 assert_success(status, stderr, "map varying lengths")
 assert_equal(['[6,30,200]'], lines(stdout), "map varying lengths output")
 
+stdout, stderr, status = run_jrf('_["values"] >> map { |x| [_[0], x] }', "{\"values\":[1,2]}\n")
+assert_success(status, stderr, "map block should use explicit arg for element")
+assert_equal(['[[1,1],[1,2]]'], lines(stdout), "map block explicit arg semantics")
+
 input_map_values = <<~NDJSON
   {"a":1,"b":10}
   {"a":2,"b":20}
@@ -550,6 +554,10 @@ assert_equal(['{"a":6,"b":50}'], lines(stdout), "map_values varying keys output"
 stdout, stderr, status = run_jrf('map_values { |v| count(v) }', input_map_values)
 assert_success(status, stderr, "map_values with count")
 assert_equal(['{"a":3,"b":3}'], lines(stdout), "map_values with count output")
+
+stdout, stderr, status = run_jrf('map_values { |v| [_.is_a?(Hash), v] }', "{\"a\":1,\"b\":2}\n")
+assert_success(status, stderr, "map_values block should use explicit arg for value")
+assert_equal(['{"a":[true,1],"b":[true,2]}'], lines(stdout), "map_values block explicit arg semantics")
 
 stdout, stderr, status = run_jrf('select(false) >> map { |x| sum(x) }', input_map)
 assert_success(status, stderr, "map no matches")
