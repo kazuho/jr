@@ -29,32 +29,26 @@ module Jrf
       @reducers = []
       @cursor = 0
       @template = nil
-      @mode = nil # nil=unknown, :reducer, :passthrough
-      @probing = false
+      @used_reducer = false
     end
 
-    def call(input, probing: false)
+    def call(input)
       @ctx.reset(input)
       @cursor = 0
-      @probing = probing
+      @used_reducer = false
       @ctx.__jrf_current_stage = self
       result = @ctx.public_send(@method_name)
+      @template ||= result if @used_reducer
 
-      if @mode.nil? && @reducers.any?
-        @mode = :reducer
-        @template = result
-      elsif @mode.nil? && !probing
-        @mode = :passthrough
-      end
-
-      (@mode == :reducer) ? Control::DROPPED : result
+      (@used_reducer || active_reducers?) ? Control::DROPPED : result
     end
 
     def allocate_reducer(value, initial:, finish: nil, &step_fn)
       idx = @cursor
       finish_rows = finish || ->(acc) { [acc] }
       @reducers[idx] ||= Reducers.reduce(initial, finish: finish_rows, &step_fn)
-      @reducers[idx].step(value) unless @probing
+      @reducers[idx].step(value)
+      @used_reducer = true
       @cursor += 1
       ReducerToken.new(idx)
     end
@@ -62,94 +56,129 @@ module Jrf
     def allocate_map(type, collection, &block)
       idx = @cursor
       map_reducer = (@reducers[idx] ||= MapReducer.new(type))
-
-      unless @probing
+      result =
         case type
         when :array
           raise TypeError, "map expects Array, got #{collection.class}" unless collection.is_a?(Array)
-          collection.each_with_index do |v, i|
-            with_scoped_reducers(map_reducer.slots[i] ||= []) do
-              result = block.call(v)
-              map_reducer.templates[i] ||= result
-            end
+          collection.each_with_index.map do |v, i|
+            slot = map_reducer.slot(i)
+            slot_result, reducer_used = with_scoped_reducers(slot.reducers) { block.call(v) }
+            slot.template ||= slot_result if reducer_used
+            slot.value = slot_result unless reducer_used
+            slot.output
           end
         when :hash
           raise TypeError, "map_values expects Hash, got #{collection.class}" unless collection.is_a?(Hash)
-          collection.each do |k, v|
-            with_scoped_reducers(map_reducer.slots[k] ||= []) do
-              result = block.call(v)
-              map_reducer.templates[k] ||= result
-            end
+          collection.each_with_object({}) do |(k, v), acc|
+            slot = map_reducer.slot(k)
+            slot_result, reducer_used = with_scoped_reducers(slot.reducers) { block.call(v) }
+            slot.template ||= slot_result if reducer_used
+            slot.value = slot_result unless reducer_used
+            acc[k] = slot.output
           end
         end
-      end
 
       @cursor += 1
-      ReducerToken.new(idx)
+      map_reducer.active? ? ReducerToken.new(idx) : result
     end
 
     def allocate_group_by(key, &block)
       idx = @cursor
       map_reducer = (@reducers[idx] ||= MapReducer.new(:hash))
-
-      unless @probing
-        row = @ctx._
-        slot = (map_reducer.slots[key] ||= [])
-        with_scoped_reducers(slot) do
-          result = block.call(row)
-          map_reducer.templates[key] ||= result
-        end
-      end
-
+      row = @ctx._
+      slot = map_reducer.slot(key)
+      result, reducer_used = with_scoped_reducers(slot.reducers) { block.call(row) }
+      slot.template ||= result if reducer_used
+      slot.value = result unless reducer_used
+      slot.forced = true
       @cursor += 1
       ReducerToken.new(idx)
     end
 
     def reducer?
-      @mode == :reducer
+      active_reducers?
     end
 
     def finish
-      return [] unless @mode == :reducer && @reducers.any?
+      return [] unless active_reducers? && @template
 
-      if @template.is_a?(ReducerToken)
+      rows = if @template.is_a?(ReducerToken)
         @reducers.fetch(@template.index).finish
       else
         [self.class.resolve_template(@template, @reducers)]
       end
+      @reducers = []
+      @template = nil
+      rows
     end
 
     private
 
+    def active_reducers?
+      @reducers.any?(&:active?)
+    end
+
     def with_scoped_reducers(reducer_list)
       saved_reducers = @reducers
       saved_cursor = @cursor
+      saved_used_reducer = @used_reducer
       @reducers = reducer_list
       @cursor = 0
-      yield
+      @used_reducer = false
+      result = yield
+      reducer_used = @used_reducer
+      [result, reducer_used]
     ensure
       @reducers = saved_reducers
       @cursor = saved_cursor
+      @used_reducer = saved_used_reducer || reducer_used
     end
 
     class MapReducer
-      attr_reader :slots, :templates
-
       def initialize(type)
         @type = type
         @slots = {}
-        @templates = {}
+      end
+
+      def slot(key)
+        @slots[key] ||= SlotState.new
+      end
+
+      def active?
+        @slots.values.any?(&:active?)
       end
 
       def finish
         case @type
         when :array
           keys = @slots.keys.sort
-          [keys.map { |k| Stage.resolve_template(@templates[k], @slots[k]) }]
+          [keys.map { |k| @slots.fetch(k).output }]
         when :hash
           result = {}
-          @slots.each { |k, reducers| result[k] = Stage.resolve_template(@templates[k], reducers) }
+          @slots.each { |k, slot| result[k] = slot.output }
           [result]
+        end
+      end
+
+      class SlotState
+        attr_reader :reducers
+        attr_accessor :template, :value, :forced
+
+        def initialize
+          @reducers = []
+          @forced = false
+        end
+
+        def active?
+          @forced || @reducers.any?(&:active?)
+        end
+
+        def output
+          if @reducers.any?(&:active?)
+            Stage.resolve_template(@template, @reducers)
+          else
+            @value
+          end
         end
       end
     end

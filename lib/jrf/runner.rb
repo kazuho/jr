@@ -11,22 +11,6 @@ module Jrf
   class Runner
     RS_CHAR = "\x1e"
 
-    class ProbeValue
-      def [](key)
-        self
-      end
-
-      def method_missing(name, *args, &block)
-        self
-      end
-
-      def respond_to_missing?(name, include_private = false)
-        true
-      end
-    end
-
-    PROBE_VALUE = ProbeValue.new
-
     def initialize(input: ARGF, out: $stdout, err: $stderr, lax: false)
       @input = input
       @out = out
@@ -41,7 +25,6 @@ module Jrf
 
       ctx = RowContext.new
       compiled = compile_stages(stages, ctx)
-      compiled.each { |stage| stage.call(PROBE_VALUE, probing: true) rescue nil }
       error = nil
 
       begin
@@ -141,15 +124,12 @@ module Jrf
     end
 
     def flush_reducers(stages)
-      tail = stages
-      loop do
-        idx = tail.index(&:reducer?)
-        break unless idx
+      stages.each_with_index do |stage, idx|
+        rows = stage.finish
+        next if rows.empty?
 
-        rows = tail[idx].finish
-        rest = tail.drop(idx + 1)
+        rest = stages.drop(idx + 1)
         rows.each { |value| process_value(value, rest) }
-        tail = rest
       end
     end
   end

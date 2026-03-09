@@ -18,6 +18,10 @@ module Jrf
       def finish
         @finish_fn.call(@acc)
       end
+
+      def active?
+        true
+      end
     end
 
     def reduce(initial, finish: nil, &step_fn)
