@@ -181,7 +181,7 @@ jrf 'sort(_["at"]) >> _["id"]'
 jrf 'sort { |a, b| b["at"] <=> a["at"] } >> _["id"]'
 ```
 
-### map { |x| expr }
+### map { |x| ... }
 
 Maps each element of an Array.
 Inside the block, `_` remains the surrounding row value; use the block parameter for the element.
@@ -198,7 +198,7 @@ jrf 'map { |x| sum(x) }'
 jrf '_["values"] >> map { |x| min(x) }'
 ```
 
-### map_values { |v| expr }
+### map_values { |v| ... }
 
 Maps each value of a Hash.
 Inside the block, `_` remains the surrounding row value; use the block parameter for the value.
