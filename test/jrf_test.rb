@@ -199,6 +199,24 @@ Dir.mktmpdir do |dir|
   stdout, stderr, status = Open3.capture3("./exe/jrf", '_["foo"]', gz_path)
   assert_success(status, stderr, "compressed input by suffix")
   assert_equal(%w[10 20], lines(stdout), "compressed input output")
+
+  lax_gz_path = File.join(dir, "input-lax.json.gz")
+  Zlib::GzipWriter.open(lax_gz_path) do |io|
+    io.write("{\"foo\":30}\n\x1e{\"foo\":40}\n")
+  end
+
+  stdout, stderr, status = Open3.capture3("./exe/jrf", "--lax", '_["foo"]', lax_gz_path)
+  assert_success(status, stderr, "compressed lax input by suffix")
+  assert_equal(%w[30 40], lines(stdout), "compressed lax input output")
+
+  second_gz_path = File.join(dir, "input2.ndjson.gz")
+  Zlib::GzipWriter.open(second_gz_path) do |io|
+    io.write("{\"foo\":50}\n")
+  end
+
+  stdout, stderr, status = Open3.capture3("./exe/jrf", '_["foo"]', gz_path, second_gz_path)
+  assert_success(status, stderr, "multiple compressed inputs by suffix")
+  assert_equal(%w[10 20 50], lines(stdout), "multiple compressed input output")
 end
 
 stdout, stderr, status = run_jrf('_', input_hello, "--pretty")
