@@ -3,10 +3,10 @@
 ## SYNOPSIS
 
 ```sh
-jrf 'STAGE >> STAGE >> STAGE ...' < input.ndjson
+jrf 'STAGE >> STAGE >> STAGE ...' < file.ndjson
+jrf 'STAGE >> STAGE >> STAGE ...' file1.ndjson file2.ndjson.gz
 jrf --help
 jrf --pretty '_'
-jrf '_["foo"]' logs.ndjson.gz
 
 # Extract
 jrf '_["foo"]'
@@ -72,11 +72,12 @@ Give it a try — install via RubyGems: `gem install jrf`
 ## INPUT AND OUTPUT
 
 - By default, input is NDJSON (one JSON value per line); empty lines are skipped.
-- `--lax` allows multiline JSON texts and parses whitespace-delimited streams (also detects RS `0x1e` for JSON-SEQ).
-- `.gz` input files are decompressed automatically.
+  - `--lax` allows multiline JSON texts and parses whitespace-delimited streams (also detects RS `0x1e` for JSON-SEQ).
+  - If no filenames are provided, data is read from the standard input.
+  - If the provided filename ends with `.gz`, the file is decompressed automatically.
 - Output is NDJSON (one compact JSON value per line).
-- `--pretty` pretty-prints each output JSON value.
-- Short outputs are grouped into atomic writes (4 KB by default; configurable via `--atomic-write-bytes N`), allowing safe use with parallel pipelines such as `xargs -P`.
+  - `--pretty` pretty-prints each output JSON value.
+  - Short outputs are grouped into atomic writes (4 KB by default; configurable via `--atomic-write-bytes N`), allowing safe use with parallel pipelines such as `xargs -P`.
 
 ## BUILT-IN FUNCTIONS
 
