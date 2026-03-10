@@ -58,24 +58,17 @@ module Jrf
       ReducerToken.new(idx)
     end
 
-    def allocate_map(collection, hash_block_mode:, result_mode:, method_name:, &block)
+    def allocate_map(mode, collection, &block)
       idx = @cursor
       @cursor += 1
-      type = map_collection_type(collection, method_name)
+      type = map_collection_type(collection, mode)
 
       # Transformation mode (detected on first call)
       if @map_transforms[idx]
-        return transform_collection(
-          type,
-          collection,
-          hash_block_mode: hash_block_mode,
-          result_mode: result_mode,
-          method_name: method_name,
-          &block
-        )
+        return transform_collection(type, collection, mode, &block)
       end
 
-      map_reducer = (@reducers[idx] ||= MapReducer.new(type, result_mode))
+      map_reducer = (@reducers[idx] ||= MapReducer.new(type, mode))
 
       case type
       when :array
@@ -90,7 +83,7 @@ module Jrf
         collection.each do |k, v|
           slot = map_reducer.slot(k)
           with_scoped_reducers(slot.reducers) do
-            result = @ctx.send(:__jrf_with_current_input, v) { invoke_hash_map_block(block, k, v, hash_block_mode) }
+            result = @ctx.send(:__jrf_with_current_input, v) { invoke_hash_map_block(block, k, v, mode) }
             slot.template ||= result
           end
         end
@@ -100,7 +93,7 @@ module Jrf
       if @mode.nil? && map_reducer.slots.values.all? { |s| s.reducers.empty? }
         @map_transforms[idx] = true
         @reducers[idx] = nil
-        return transformed_slots(type, map_reducer, result_mode: result_mode, method_name: method_name)
+        return transformed_slots(type, map_reducer, mode)
       end
 
       ReducerToken.new(idx)
@@ -108,7 +101,7 @@ module Jrf
 
     def allocate_group_by(key, &block)
       idx = @cursor
-      map_reducer = (@reducers[idx] ||= MapReducer.new(:hash, :hash))
+      map_reducer = (@reducers[idx] ||= MapReducer.new(:hash, :map_values))
 
       row = @ctx._
       slot = map_reducer.slot(key)
@@ -144,24 +137,24 @@ module Jrf
       @cursor = saved_cursor
     end
 
-    def transform_collection(type, collection, hash_block_mode:, result_mode:, method_name:, &block)
+    def transform_collection(type, collection, mode, &block)
       case type
       when :array
         collection.each_with_object([]) do |value, result|
           mapped = @ctx.send(:__jrf_with_current_input, value) { block.call(value) }
-          append_map_result(result, mapped)
+          append_map_result(result, mapped, mode)
         end
       when :hash
-        if result_mode == :array
+        if mode == :map
           collection.each_with_object([]) do |(key, value), result|
-            mapped = @ctx.send(:__jrf_with_current_input, value) { invoke_hash_map_block(block, key, value, hash_block_mode) }
-            append_hash_map_result(result, mapped, method_name)
+            mapped = @ctx.send(:__jrf_with_current_input, value) { invoke_hash_map_block(block, key, value, mode) }
+            append_map_result(result, mapped, mode)
           end
         else
           collection.each_with_object({}) do |(key, value), result|
-            mapped = @ctx.send(:__jrf_with_current_input, value) { invoke_hash_map_block(block, key, value, hash_block_mode) }
+            mapped = @ctx.send(:__jrf_with_current_input, value) { invoke_hash_map_block(block, key, value, mode) }
             next if mapped.equal?(Control::DROPPED)
-            raise TypeError, "flat is not supported inside #{method_name}" if mapped.is_a?(Control::Flat)
+            raise TypeError, "flat is not supported inside map_values" if mapped.is_a?(Control::Flat)
 
             result[key] = mapped
           end
@@ -169,23 +162,23 @@ module Jrf
       end
     end
 
-    def transformed_slots(type, map_reducer, result_mode:, method_name:)
+    def transformed_slots(type, map_reducer, mode)
       case type
       when :array
         map_reducer.slots
           .sort_by { |k, _| k }
           .each_with_object([]) do |(_, slot), result|
-            append_map_result(result, slot.template)
+            append_map_result(result, slot.template, mode)
           end
       when :hash
-        if result_mode == :array
+        if mode == :map
           map_reducer.slots.each_with_object([]) do |(_key, slot), result|
-            append_hash_map_result(result, slot.template, method_name)
+            append_map_result(result, slot.template, mode)
           end
         else
           map_reducer.slots.each_with_object({}) do |(key, slot), result|
             next if slot.template.equal?(Control::DROPPED)
-            raise TypeError, "flat is not supported inside #{method_name}" if slot.template.is_a?(Control::Flat)
+            raise TypeError, "flat is not supported inside map_values" if slot.template.is_a?(Control::Flat)
 
             result[key] = slot.template
           end
@@ -193,29 +186,27 @@ module Jrf
       end
     end
 
-    def map_collection_type(collection, method_name)
+    def map_collection_type(collection, mode)
       return :array if collection.is_a?(Array)
       return :hash if collection.is_a?(Hash)
 
-      expected = method_name == "map_values" ? "Hash" : "Array or Hash"
-      raise TypeError, "#{method_name} expects #{expected}, got #{collection.class}"
+      expected = mode == :map_values ? "Hash" : "Array or Hash"
+      raise TypeError, "#{mode} expects #{expected}, got #{collection.class}"
     end
 
-    def invoke_hash_map_block(block, key, value, hash_block_mode)
-      case hash_block_mode
-      when :ruby
+    def invoke_hash_map_block(block, key, value, mode)
+      if mode == :map
         block.call([key, value])
-      when :value_only
-        block.call(value)
       else
-        raise ArgumentError, "unsupported hash block mode: #{hash_block_mode.inspect}"
+        block.call(value)
       end
     end
 
-    def append_map_result(result, mapped)
+    def append_map_result(result, mapped, mode)
       return if mapped.equal?(Control::DROPPED)
 
       if mapped.is_a?(Control::Flat)
+        raise TypeError, "flat is not supported inside #{mode}" unless mode == :map
         unless mapped.value.is_a?(Array)
           raise TypeError, "flat expects Array, got #{mapped.value.class}"
         end
@@ -226,19 +217,12 @@ module Jrf
       end
     end
 
-    def append_hash_map_result(result, mapped, method_name)
-      return if mapped.equal?(Control::DROPPED)
-      raise TypeError, "flat is not supported inside #{method_name}" if mapped.is_a?(Control::Flat)
-
-      result << mapped
-    end
-
     class MapReducer
       attr_reader :slots
 
-      def initialize(type, result_type)
+      def initialize(type, mode)
         @type = type
-        @result_type = result_type
+        @mode = mode
         @slots = {}
       end
 
@@ -252,15 +236,12 @@ module Jrf
           keys = @slots.keys.sort
           [keys.map { |k| Stage.resolve_template(@slots[k].template, @slots[k].reducers) }]
         when :hash
-          case @result_type
-          when :array
+          if @mode == :map
             [@slots.map { |_k, s| Stage.resolve_template(s.template, s.reducers) }]
-          when :hash
+          else
             result = {}
             @slots.each { |k, s| result[k] = Stage.resolve_template(s.template, s.reducers) }
             [result]
-          else
-            raise ArgumentError, "unsupported map result type: #{@result_type.inspect}"
           end
         end
       end
