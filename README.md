@@ -65,8 +65,6 @@ When built-ins alone aren't enough, Ruby blocks let you extend the logic natural
 jrf 'group_by(_["status"]) { |row| average(row["latency"]) }'
 ```
 
-Ruby was a natural choice here: jrf’s core logic and user-supplied expressions are optimized together in one JIT-compiled runtime, Ruby avoids unnecessary string copies, and it comes with a heavily optimized JSON parser.
-
 Ruby is also fast and memory-efficient: jrf’s core logic and user-supplied expressions are optimized together by the same [JIT](https://docs.ruby-lang.org/en/3.4/yjit/yjit_md.html), strings are copied only when necessary, and Ruby comes with a [heavily optimized JSON parser](https://byroot.github.io/ruby/json/2024/12/15/optimizing-ruby-json-part-1.html). As a result, `jrf` outperforms `jq` — here over 3x on a simple aggregation:
 
 ```sh
