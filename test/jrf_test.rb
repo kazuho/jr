@@ -111,7 +111,7 @@ assert_includes(stderr, 'stage[1]: _["hello"]')
 
 stdout, stderr, status = Open3.capture3("./exe/jrf", "--help")
 assert_success(status, stderr, "help option")
-assert_includes(stdout, "usage: jrf [-v] [--lax] [--pretty] [--atomic-write-bytes N] [--help] 'STAGE >> STAGE >> ...'")
+assert_includes(stdout, "usage: jrf [options] 'STAGE >> STAGE >> ...'")
 assert_includes(stdout, "JSON filter with the power and speed of Ruby.")
 assert_includes(stdout, "--lax")
 assert_includes(stdout, "--pretty")

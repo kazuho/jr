@@ -4,10 +4,10 @@ require_relative "cli/runner"
 
 module Jrf
   class CLI
-    USAGE = "usage: jrf [-v] [--lax] [--pretty] [--atomic-write-bytes N] [--help] 'STAGE >> STAGE >> ...'"
+    USAGE = "usage: jrf [options] 'STAGE >> STAGE >> ...'"
 
     HELP_TEXT = <<~'TEXT'
-      usage: jrf [-v] [--lax] [--pretty] [--atomic-write-bytes N] [--help] 'STAGE >> STAGE >> ...'
+      usage: jrf [options] 'STAGE >> STAGE >> ...'
 
       JSON filter with the power and speed of Ruby.
 
