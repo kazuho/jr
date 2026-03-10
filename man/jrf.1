@@ -6,7 +6,7 @@ jrf \- JSON filter with the power and speed of Ruby
 .nf
 jrf 'STAGE >> STAGE >> STAGE ...' < input.ndjson
 jrf --help
-jrf '_["msg"]'
+jrf --pretty '_'
 
 # Extract
 jrf '_["foo"]'
@@ -65,7 +65,7 @@ Empty lines are skipped.
 .IP \[bu] 2
 Each non-empty line is parsed with JSON.parse.
 .IP \[bu] 2
-Output writes are buffered and flushed before appending a record that would push the pending output past 4 KB. Any remaining buffered output is flushed at end of run.
+Short outputs are grouped into atomic writes, allowing safe use with parallel pipelines such as xargs \-P.
 
 .SH BUILT-IN FUNCTIONS
 
