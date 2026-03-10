@@ -61,17 +61,21 @@ module Jrf
     def allocate_map(builtin, collection, &block)
       idx = @cursor
       @cursor += 1
-      input_type = detect_input_type(collection, builtin)
+
+      if collection.is_a?(Array)
+        raise TypeError, "map_values expects Hash, got Array" if builtin == :map_values
+      elsif !collection.is_a?(Hash)
+        raise TypeError, "#{builtin} expects #{builtin == :map_values ? "Hash" : "Array or Hash"}, got #{collection.class}"
+      end
 
       # Transformation mode (detected on first call)
       if @map_transforms[idx]
-        return transform_collection(builtin, input_type, collection, &block)
+        return transform_collection(builtin, collection, &block)
       end
 
-      map_reducer = (@reducers[idx] ||= MapReducer.new(builtin, input_type))
+      map_reducer = (@reducers[idx] ||= MapReducer.new(builtin, collection.is_a?(Array)))
 
-      case input_type
-      when :array
+      if collection.is_a?(Array)
         collection.each_with_index do |v, i|
           slot = map_reducer.slot(i)
           with_scoped_reducers(slot.reducers) do
@@ -79,7 +83,7 @@ module Jrf
             slot.template ||= result
           end
         end
-      when :hash
+      else
         collection.each do |k, v|
           slot = map_reducer.slot(k)
           with_scoped_reducers(slot.reducers) do
@@ -93,7 +97,7 @@ module Jrf
       if @mode.nil? && map_reducer.slots.values.all? { |s| s.reducers.empty? }
         @map_transforms[idx] = true
         @reducers[idx] = nil
-        return transformed_slots(builtin, input_type, map_reducer)
+        return transformed_slots(builtin, map_reducer)
       end
 
       ReducerToken.new(idx)
@@ -101,7 +105,7 @@ module Jrf
 
     def allocate_group_by(key, &block)
       idx = @cursor
-      map_reducer = (@reducers[idx] ||= MapReducer.new(:group_by, :hash))
+      map_reducer = (@reducers[idx] ||= MapReducer.new(:group_by, false))
 
       row = @ctx._
       slot = map_reducer.slot(key)
@@ -145,62 +149,45 @@ module Jrf
       end
     end
 
-    def detect_input_type(collection, builtin)
-      return :array if collection.is_a?(Array)
-      return :hash if collection.is_a?(Hash)
-
-      if builtin == :map_values
-        raise TypeError, "map_values expects Hash, got #{collection.class}"
-      else
-        raise TypeError, "map expects Array or Hash, got #{collection.class}"
-      end
-    end
-
-    def transform_collection(builtin, input_type, collection, &block)
-      case input_type
-      when :array
+    def transform_collection(builtin, collection, &block)
+      if collection.is_a?(Array)
         collection.each_with_object([]) do |value, result|
           mapped = @ctx.send(:__jrf_with_current_input, value) { block.call(value) }
           append_result(result, mapped, builtin)
         end
-      when :hash
-        if builtin == :map
-          collection.each_with_object([]) do |(key, value), result|
-            mapped = @ctx.send(:__jrf_with_current_input, value) { invoke_block(builtin, block, key, value) }
-            append_result(result, mapped, builtin)
-          end
-        else
-          collection.each_with_object({}) do |(key, value), result|
-            mapped = @ctx.send(:__jrf_with_current_input, value) { invoke_block(builtin, block, key, value) }
-            next if mapped.equal?(Control::DROPPED)
-            raise TypeError, "flat is not supported inside map_values" if mapped.is_a?(Control::Flat)
+      elsif builtin == :map
+        collection.each_with_object([]) do |(key, value), result|
+          mapped = @ctx.send(:__jrf_with_current_input, value) { invoke_block(builtin, block, key, value) }
+          append_result(result, mapped, builtin)
+        end
+      else
+        collection.each_with_object({}) do |(key, value), result|
+          mapped = @ctx.send(:__jrf_with_current_input, value) { invoke_block(builtin, block, key, value) }
+          next if mapped.equal?(Control::DROPPED)
+          raise TypeError, "flat is not supported inside map_values" if mapped.is_a?(Control::Flat)
 
-            result[key] = mapped
-          end
+          result[key] = mapped
         end
       end
     end
 
-    def transformed_slots(builtin, input_type, map_reducer)
-      case input_type
-      when :array
+    def transformed_slots(builtin, map_reducer)
+      if map_reducer.array_input?
         map_reducer.slots
           .sort_by { |k, _| k }
           .each_with_object([]) do |(_, slot), result|
             append_result(result, slot.template, builtin)
           end
-      when :hash
-        if builtin == :map
-          map_reducer.slots.each_with_object([]) do |(_key, slot), result|
-            append_result(result, slot.template, builtin)
-          end
-        else
-          map_reducer.slots.each_with_object({}) do |(key, slot), result|
-            next if slot.template.equal?(Control::DROPPED)
-            raise TypeError, "flat is not supported inside map_values" if slot.template.is_a?(Control::Flat)
+      elsif builtin == :map
+        map_reducer.slots.each_with_object([]) do |(_key, slot), result|
+          append_result(result, slot.template, builtin)
+        end
+      else
+        map_reducer.slots.each_with_object({}) do |(key, slot), result|
+          next if slot.template.equal?(Control::DROPPED)
+          raise TypeError, "flat is not supported inside map_values" if slot.template.is_a?(Control::Flat)
 
-            result[key] = slot.template
-          end
+          result[key] = slot.template
         end
       end
     end
@@ -223,10 +210,14 @@ module Jrf
     class MapReducer
       attr_reader :slots
 
-      def initialize(builtin, input_type)
+      def initialize(builtin, array_input)
         @builtin = builtin
-        @input_type = input_type
+        @array_input = array_input
         @slots = {}
+      end
+
+      def array_input?
+        @array_input
       end
 
       def slot(key)
@@ -234,18 +225,15 @@ module Jrf
       end
 
       def finish
-        case @input_type
-        when :array
+        if @array_input
           keys = @slots.keys.sort
           [keys.map { |k| Stage.resolve_template(@slots[k].template, @slots[k].reducers) }]
-        when :hash
-          if @builtin == :map
-            [@slots.map { |_k, s| Stage.resolve_template(s.template, s.reducers) }]
-          else
-            result = {}
-            @slots.each { |k, s| result[k] = Stage.resolve_template(s.template, s.reducers) }
-            [result]
-          end
+        elsif @builtin == :map
+          [@slots.map { |_k, s| Stage.resolve_template(s.template, s.reducers) }]
+        else
+          result = {}
+          @slots.each { |k, s| result[k] = Stage.resolve_template(s.template, s.reducers) }
+          [result]
         end
       end
 
