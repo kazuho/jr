@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require "json"
-require "zlib"
 require_relative "../pipeline"
 require_relative "../pipeline_parser"
 
@@ -29,10 +28,8 @@ module Jrf
         end
       end
 
-      def initialize(paths: [], stdin: ARGF, sources: nil, out: $stdout, err: $stderr, lax: false, pretty: false, atomic_write_bytes: DEFAULT_OUTPUT_BUFFER_LIMIT)
-        @paths = paths.dup
-        @stdin = stdin
-        @sources = sources
+      def initialize(input_sources:, out: $stdout, err: $stderr, lax: false, pretty: false, atomic_write_bytes: DEFAULT_OUTPUT_BUFFER_LIMIT)
+        @input_sources = input_sources
         @out = out
         @err = err
         @lax = lax
@@ -108,26 +105,7 @@ module Jrf
       end
 
       def each_input_source
-        return @sources.each_source { |source| yield source } if @sources
-
-        if @paths.empty?
-          yield @stdin
-          return
-        end
-
-        @paths.each do |path|
-          if path == "-"
-            yield @stdin
-          elsif path.end_with?(".gz")
-            Zlib::GzipReader.open(path) do |source|
-              yield source
-            end
-          else
-            File.open(path, "rb") do |source|
-              yield source
-            end
-          end
-        end
+        @input_sources.each { |source| yield source }
       end
 
       def emit_output(value)
