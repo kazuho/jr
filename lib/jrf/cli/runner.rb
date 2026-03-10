@@ -28,8 +28,8 @@ module Jrf
         end
       end
 
-      def initialize(input_sources:, out: $stdout, err: $stderr, lax: false, pretty: false, atomic_write_bytes: DEFAULT_OUTPUT_BUFFER_LIMIT)
-        @input_sources = input_sources
+      def initialize(inputs:, out: $stdout, err: $stderr, lax: false, pretty: false, atomic_write_bytes: DEFAULT_OUTPUT_BUFFER_LIMIT)
+        @inputs = inputs
         @out = out
         @err = err
         @lax = lax
@@ -65,7 +65,7 @@ module Jrf
       end
 
       def each_input_value_ndjson
-        each_input_source do |source|
+        each_input do |source|
           source.each_line do |raw_line|
             line = raw_line.strip
             next if line.empty?
@@ -89,7 +89,7 @@ module Jrf
           def array_append(array, value) = array << value
           def add_value(value) = @emit.call(value)
         end
-        each_input_source do |source|
+        each_input do |source|
           Oj.sc_parse(handler.new { |value| yield value }, RsNormalizer.new(source))
         end
       rescue LoadError
@@ -104,8 +104,8 @@ module Jrf
         end
       end
 
-      def each_input_source
-        @input_sources.each { |source| yield source }
+      def each_input
+        @inputs.each { |source| yield source }
       end
 
       def emit_output(value)

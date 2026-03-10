@@ -75,7 +75,7 @@ module Jrf
       end
 
       expression = argv.shift
-      input_sources = Enumerator.new do |y|
+      inputs = Enumerator.new do |y|
         if argv.empty?
           y << input
         else
@@ -96,7 +96,7 @@ module Jrf
         end
       end
       Runner.new(
-        input_sources: input_sources,
+        inputs: inputs,
         out: out,
         err: err,
         lax: lax,
