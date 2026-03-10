@@ -3,10 +3,13 @@
 ## SYNOPSIS
 
 ```sh
+# jrf reads files (or STDIN) and emits NDJSON or pretty-prints JSON values
 jrf 'STAGE >> STAGE >> STAGE ...' < file.ndjson
 jrf 'STAGE >> STAGE >> STAGE ...' file1.ndjson file2.ndjson.gz
+jrf --lax 'STAGE >> STAGE >> STAGE ...' < multiline.json
+jrf --lax 'STAGE >> STAGE >> STAGE ...' < file.jsonseq
+jrf --pretty '_' file.json file.ndjson
 jrf --help
-jrf --pretty '_'
 
 # Extract
 jrf '_["foo"]'
@@ -18,6 +21,12 @@ jrf 'select(_["x"] > 10) >> _["foo"]'
 jrf 'select(_["item"] == "Apple") >> sum(_["count"])'
 jrf 'percentile(_["ttlb"], 0.50)'
 jrf '_["msg"] >> reduce(nil) { |acc, v| acc ? "#{acc} #{v}" : v }'
+
+# Transform array elements
+jrf 'map { |x| x + 1 }'
+
+# Transform object values
+jrf 'map_values { |v| v * 10 }'
 
 # Flatten arrays into rows
 jrf '_["items"] >> flat'
