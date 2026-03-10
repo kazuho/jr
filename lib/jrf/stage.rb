@@ -142,10 +142,10 @@ module Jrf
     end
 
     def invoke_block(builtin, block, key, value)
-      if builtin == :map
-        block.call([key, value])
-      else
-        block.call(value)
+      case builtin
+      when :map then block.call([key, value])
+      when :map_values then block.call(value)
+      else raise ArgumentError, "unexpected builtin: #{builtin}"
       end
     end
 
@@ -155,18 +155,23 @@ module Jrf
           mapped = @ctx.send(:__jrf_with_current_input, value) { block.call(value) }
           append_result(result, mapped, builtin)
         end
-      elsif builtin == :map
-        collection.each_with_object([]) do |(key, value), result|
-          mapped = @ctx.send(:__jrf_with_current_input, value) { invoke_block(builtin, block, key, value) }
-          append_result(result, mapped, builtin)
-        end
       else
-        collection.each_with_object({}) do |(key, value), result|
-          mapped = @ctx.send(:__jrf_with_current_input, value) { invoke_block(builtin, block, key, value) }
-          next if mapped.equal?(Control::DROPPED)
-          raise TypeError, "flat is not supported inside map_values" if mapped.is_a?(Control::Flat)
+        case builtin
+        when :map
+          collection.each_with_object([]) do |(key, value), result|
+            mapped = @ctx.send(:__jrf_with_current_input, value) { invoke_block(builtin, block, key, value) }
+            append_result(result, mapped, builtin)
+          end
+        when :map_values
+          collection.each_with_object({}) do |(key, value), result|
+            mapped = @ctx.send(:__jrf_with_current_input, value) { invoke_block(builtin, block, key, value) }
+            next if mapped.equal?(Control::DROPPED)
+            raise TypeError, "flat is not supported inside map_values" if mapped.is_a?(Control::Flat)
 
-          result[key] = mapped
+            result[key] = mapped
+          end
+        else
+          raise ArgumentError, "unexpected builtin: #{builtin}"
         end
       end
     end
@@ -178,16 +183,21 @@ module Jrf
           .each_with_object([]) do |(_, slot), result|
             append_result(result, slot.template, builtin)
           end
-      elsif builtin == :map
-        map_reducer.slots.each_with_object([]) do |(_key, slot), result|
-          append_result(result, slot.template, builtin)
-        end
       else
-        map_reducer.slots.each_with_object({}) do |(key, slot), result|
-          next if slot.template.equal?(Control::DROPPED)
-          raise TypeError, "flat is not supported inside map_values" if slot.template.is_a?(Control::Flat)
+        case builtin
+        when :map
+          map_reducer.slots.each_with_object([]) do |(_key, slot), result|
+            append_result(result, slot.template, builtin)
+          end
+        when :map_values
+          map_reducer.slots.each_with_object({}) do |(key, slot), result|
+            next if slot.template.equal?(Control::DROPPED)
+            raise TypeError, "flat is not supported inside map_values" if slot.template.is_a?(Control::Flat)
 
-          result[key] = slot.template
+            result[key] = slot.template
+          end
+        else
+          raise ArgumentError, "unexpected builtin: #{builtin}"
         end
       end
     end
@@ -196,12 +206,17 @@ module Jrf
       return if mapped.equal?(Control::DROPPED)
 
       if mapped.is_a?(Control::Flat)
-        raise TypeError, "flat is not supported inside #{builtin}" unless builtin == :map
-        unless mapped.value.is_a?(Array)
-          raise TypeError, "flat expects Array, got #{mapped.value.class}"
+        case builtin
+        when :map
+          unless mapped.value.is_a?(Array)
+            raise TypeError, "flat expects Array, got #{mapped.value.class}"
+          end
+          result.concat(mapped.value)
+        when :map_values
+          raise TypeError, "flat is not supported inside map_values"
+        else
+          raise ArgumentError, "unexpected builtin: #{builtin}"
         end
-
-        result.concat(mapped.value)
       else
         result << mapped
       end
@@ -228,12 +243,17 @@ module Jrf
         if @array_input
           keys = @slots.keys.sort
           [keys.map { |k| Stage.resolve_template(@slots[k].template, @slots[k].reducers) }]
-        elsif @builtin == :map
-          [@slots.map { |_k, s| Stage.resolve_template(s.template, s.reducers) }]
         else
-          result = {}
-          @slots.each { |k, s| result[k] = Stage.resolve_template(s.template, s.reducers) }
-          [result]
+          case @builtin
+          when :map
+            [@slots.map { |_k, s| Stage.resolve_template(s.template, s.reducers) }]
+          when :map_values, :group_by
+            result = {}
+            @slots.each { |k, s| result[k] = Stage.resolve_template(s.template, s.reducers) }
+            [result]
+          else
+            raise ArgumentError, "unexpected builtin: #{@builtin}"
+          end
         end
       end
 
