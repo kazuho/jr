@@ -28,8 +28,8 @@ module Jrf
         end
       end
 
-      def initialize(input: ARGF, out: $stdout, err: $stderr, lax: false, pretty: false, atomic_write_bytes: DEFAULT_OUTPUT_BUFFER_LIMIT)
-        @input = input
+      def initialize(inputs:, out: $stdout, err: $stderr, lax: false, pretty: false, atomic_write_bytes: DEFAULT_OUTPUT_BUFFER_LIMIT)
+        @inputs = inputs
         @out = out
         @err = err
         @lax = lax
@@ -65,11 +65,13 @@ module Jrf
       end
 
       def each_input_value_ndjson
-        @input.each_line do |raw_line|
-          line = raw_line.strip
-          next if line.empty?
+        each_input do |source|
+          source.each_line do |raw_line|
+            line = raw_line.strip
+            next if line.empty?
 
-          yield JSON.parse(line)
+            yield JSON.parse(line)
+          end
         end
       end
 
@@ -86,8 +88,10 @@ module Jrf
           def array_start = []
           def array_append(array, value) = array << value
           def add_value(value) = @emit.call(value)
-        end.new { |value| yield value }
-        Oj.sc_parse(handler, RsNormalizer.new(@input))
+        end
+        each_input do |source|
+          Oj.sc_parse(handler.new { |value| yield value }, RsNormalizer.new(source))
+        end
       rescue LoadError
         raise "oj is required for --lax mode (gem install oj)"
       rescue Oj::ParseError => e
@@ -98,6 +102,10 @@ module Jrf
         stages.each_with_index do |stage, i|
           @err.puts "stage[#{i}]: #{stage[:src]}"
         end
+      end
+
+      def each_input
+        @inputs.each { |source| yield source }
       end
 
       def emit_output(value)

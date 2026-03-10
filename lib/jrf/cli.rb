@@ -75,8 +75,28 @@ module Jrf
       end
 
       expression = argv.shift
+      inputs = Enumerator.new do |y|
+        if argv.empty?
+          y << input
+        else
+          argv.each do |path|
+            if path == "-"
+              y << input
+            elsif path.end_with?(".gz")
+              require "zlib"
+              Zlib::GzipReader.open(path) do |source|
+                y << source
+              end
+            else
+              File.open(path, "rb") do |source|
+                y << source
+              end
+            end
+          end
+        end
+      end
       Runner.new(
-        input: input,
+        inputs: inputs,
         out: out,
         err: err,
         lax: lax,
