@@ -6,6 +6,7 @@
 jrf 'STAGE >> STAGE >> STAGE ...' < input.ndjson
 jrf --help
 jrf --pretty '_'
+jrf '_["msg"]'
 
 # Extract
 jrf '_["foo"]'
@@ -74,6 +75,7 @@ Give it a try — install via RubyGems: `gem install jrf`
 - `--lax` allows multiline JSON texts and parses whitespace-delimited streams (also detects RS `0x1e` for JSON-SEQ).
 - Output is NDJSON (one compact JSON value per line).
 - `--pretty` pretty-prints each output JSON value.
+- Output writes are buffered and flushed before appending a record that would push the pending output past 4 KB; any remaining buffered output is flushed at end of run.
 
 ## BUILT-IN FUNCTIONS
 
