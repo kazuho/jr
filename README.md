@@ -80,6 +80,7 @@ Give it a try — install via RubyGems: `gem install jrf`
 `jrf` processes the input using a multi-stage pipeline that is connected by top-level `>>`.
 
 Within each stage, the current JSON value is available as `_`, and the following built-in functions are provided.
+Inside nested block contexts such as `map`, `map_values`, and `group_by`, `_` remains the surrounding row value, while implicit-input built-ins operate on the current target object for that block.
 For aggregation functions, `nil` values are ignored.
 
 ### select(predicate)
@@ -102,7 +103,7 @@ jrf '_["items"] >> flat'
 ### group(expr)
 
 Collects values into one Array. This is the opposite of `flat`.
-`group` (without arguments) is shorthand for `group(_)`, i.e., collect the current stage value as-is.
+`group` (without arguments) collects the current target object as-is.
 `group(expr)` first evaluates `expr` and collects that result instead.
 
 ```sh
@@ -186,14 +187,17 @@ jrf '_["msg"] >> reduce(nil) { |acc, v| acc ? "#{acc} #{v}" : v }'
 jrf '_["count"] >> reduce(0) { |acc, v| acc + v }'
 ```
 
+### sort()
 ### sort(key_expr)
 ### sort(key_expr) { |a, b| ... }
 
 Sorts rows.
+With no argument, rows are sorted by the current target object.
 With one argument, rows are sorted by key expression.
 With a block, rows are sorted by custom comparator.
 
 ```sh
+jrf 'sort >> _["id"]'
 jrf 'sort(_["at"]) >> _["id"]'
 jrf 'sort { |a, b| b["at"] <=> a["at"] } >> _["id"]'
 ```
