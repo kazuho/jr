@@ -145,14 +145,17 @@ module Jrf
 
         collection.each_with_object([]) do |value, result|
           mapped = @ctx.send(:__jrf_with_current_input, value) { block.call(value) }
-          result << mapped unless mapped.equal?(Control::DROPPED)
+          append_map_result(result, mapped)
         end
       when :hash
         raise TypeError, "map_values expects Hash, got #{collection.class}" unless collection.is_a?(Hash)
 
         collection.each_with_object({}) do |(key, value), result|
           mapped = @ctx.send(:__jrf_with_current_input, value) { block.call(value) }
-          result[key] = mapped unless mapped.equal?(Control::DROPPED)
+          next if mapped.equal?(Control::DROPPED)
+          raise TypeError, "flat is not supported inside map_values" if mapped.is_a?(Control::Flat)
+
+          result[key] = mapped
         end
       end
     end
@@ -163,12 +166,29 @@ module Jrf
         map_reducer.slots
           .sort_by { |k, _| k }
           .each_with_object([]) do |(_, slot), result|
-            result << slot.template unless slot.template.equal?(Control::DROPPED)
+            append_map_result(result, slot.template)
           end
       when :hash
         map_reducer.slots.each_with_object({}) do |(key, slot), result|
-          result[key] = slot.template unless slot.template.equal?(Control::DROPPED)
+          next if slot.template.equal?(Control::DROPPED)
+          raise TypeError, "flat is not supported inside map_values" if slot.template.is_a?(Control::Flat)
+
+          result[key] = slot.template
         end
+      end
+    end
+
+    def append_map_result(result, mapped)
+      return if mapped.equal?(Control::DROPPED)
+
+      if mapped.is_a?(Control::Flat)
+        unless mapped.value.is_a?(Array)
+          raise TypeError, "flat expects Array, got #{mapped.value.class}"
+        end
+
+        result.concat(mapped.value)
+      else
+        result << mapped
       end
     end
 

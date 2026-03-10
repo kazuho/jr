@@ -187,7 +187,6 @@ jrf 'sort { |a, b| b["at"] <=> a["at"] } >> _["id"]'
 
 Maps each element of an Array.
 Inside the block, `_` remains the surrounding row value; use the block parameter for the element.
-Implicit-input built-ins such as `select`, `group`, `sort`, and `reduce` operate on the current element.
 
 If the block is a plain expression, `map` behaves like a regular per-row transform.
 If the block calls reducers, each array position gets its own independent reducer instance across rows.
@@ -205,7 +204,6 @@ jrf '_["values"] >> map { |x| min(x) }'
 
 Maps each value of a Hash.
 Inside the block, `_` remains the surrounding row value; use the block parameter for the value.
-Implicit-input built-ins such as `select`, `group`, `sort`, and `reduce` operate on the current value.
 
 If the block is a plain expression, `map_values` behaves like a regular per-row transform.
 If the block calls reducers, each key gets its own independent reducer instance across rows.
@@ -226,7 +224,6 @@ Without a block, collects rows into arrays (equivalent to `group_by(key) { group
 
 With a block, applies the given reducer independently per group.
 Inside the block, `_` still refers to the surrounding row, and the current row is also yielded as the block parameter.
-Implicit-input built-ins operate on that current row.
 
 ```sh
 jrf 'group_by(_["status"])'

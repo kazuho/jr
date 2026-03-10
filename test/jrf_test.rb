@@ -174,6 +174,14 @@ stdout, stderr, status = run_jrf('_["items"] >> flat >> group', input_flat)
 assert_success(status, stderr, "flat then group")
 assert_equal(['[1,2,3]'], lines(stdout), "flat then group output")
 
+stdout, stderr, status = run_jrf('map { |x| flat }', "[[1,2],[3],[4,5,6]]\n")
+assert_success(status, stderr, "flat inside map")
+assert_equal(['[1,2,3,4,5,6]'], lines(stdout), "flat inside map output")
+
+stdout, stderr, status = run_jrf('map_values { |v| flat }', "{\"a\":[1,2],\"b\":[3]}\n")
+assert_failure(status, "flat inside map_values")
+assert_includes(stderr, "flat is not supported inside map_values")
+
 stdout, stderr, status = run_jrf('_["foo"] >> flat', input)
 assert_failure(status, "flat requires array")
 assert_includes(stderr, "flat expects Array")
