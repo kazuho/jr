@@ -24,8 +24,11 @@ jrf '_["items"] >> flat'
 # Sort rows by key expression
 jrf 'sort(_["at"]) >> _["id"]'
 
+# Group rows into arrays by key
+jrf 'group_by(_["status"])'
+
 # Group by key and aggregate
-jrf 'group_by(_["status"]) { count() }'
+jrf 'group_by(_["item"]) { |row| sum(row["count"] * row["price"]) }'
 ```
 
 ## WHY RUBY?
@@ -222,8 +225,8 @@ Inside the block, `_` still refers to the surrounding row, and the current row i
 jrf 'group_by(_["status"])'
 # → {"200":[...rows...],"404":[...rows...]}
 
-jrf 'group_by(_["status"]) { count() }'
-# → {"200":15,"404":3}
+jrf 'group_by(_["item"]) { |row| sum(row["count"] * row["price"]) }'
+# → {"Apple":1250,"Orange":830}
 
 jrf 'group_by(_["status"]) { |row| average(row["latency"]) }'
 # → {"200":42.5,"404":120.0}
