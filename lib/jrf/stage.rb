@@ -101,7 +101,7 @@ module Jrf
 
     def allocate_group_by(key, &block)
       idx = @cursor
-      map_reducer = (@reducers[idx] ||= MapReducer.new(:hash, :map_values))
+      map_reducer = (@reducers[idx] ||= MapReducer.new(:hash, :hash))
 
       row = @ctx._
       slot = map_reducer.slot(key)
@@ -145,7 +145,7 @@ module Jrf
           append_map_result(result, mapped, mode)
         end
       when :hash
-        if mode == :map
+        if mode == :array
           collection.each_with_object([]) do |(key, value), result|
             mapped = @ctx.send(:__jrf_with_current_input, value) { invoke_hash_map_block(block, key, value, mode) }
             append_map_result(result, mapped, mode)
@@ -171,7 +171,7 @@ module Jrf
             append_map_result(result, slot.template, mode)
           end
       when :hash
-        if mode == :map
+        if mode == :array
           map_reducer.slots.each_with_object([]) do |(_key, slot), result|
             append_map_result(result, slot.template, mode)
           end
@@ -190,12 +190,12 @@ module Jrf
       return :array if collection.is_a?(Array)
       return :hash if collection.is_a?(Hash)
 
-      expected = mode == :map_values ? "Hash" : "Array or Hash"
-      raise TypeError, "#{mode} expects #{expected}, got #{collection.class}"
+      expected = mode == :hash ? "Hash" : "Array or Hash"
+      raise TypeError, "#{mode == :hash ? "map_values" : "map"} expects #{expected}, got #{collection.class}"
     end
 
     def invoke_hash_map_block(block, key, value, mode)
-      if mode == :map
+      if mode == :array
         block.call([key, value])
       else
         block.call(value)
@@ -206,7 +206,7 @@ module Jrf
       return if mapped.equal?(Control::DROPPED)
 
       if mapped.is_a?(Control::Flat)
-        raise TypeError, "flat is not supported inside #{mode}" unless mode == :map
+        raise TypeError, "flat is not supported inside map_values" unless mode == :array
         unless mapped.value.is_a?(Array)
           raise TypeError, "flat expects Array, got #{mapped.value.class}"
         end
@@ -236,7 +236,7 @@ module Jrf
           keys = @slots.keys.sort
           [keys.map { |k| Stage.resolve_template(@slots[k].template, @slots[k].reducers) }]
         when :hash
-          if @mode == :map
+          if @mode == :array
             [@slots.map { |_k, s| Stage.resolve_template(s.template, s.reducers) }]
           else
             result = {}
