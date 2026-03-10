@@ -190,6 +190,9 @@ If the block calls reducers, each array position gets its own independent reduce
 ```sh
 jrf 'map { |x| x + 1 }'
 
+jrf 'map { |x| select(x >= 2) }'
+# [1,2,3] → [2,3]
+
 jrf 'map { |x| sum(x) }'
 # [1,10], [2,20], [3,30] → [6,60]
 

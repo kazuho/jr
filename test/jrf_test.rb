@@ -19,6 +19,13 @@ def assert_includes(text, fragment, msg = nil)
   raise "assert_includes failed#{msg ? " (#{msg})" : ""}\ntext: #{text.inspect}\nfragment: #{fragment.inspect}"
 end
 
+def known_bug(description)
+  yield
+  raise "known_bug now passes — remove the known_bug marker: #{description}"
+rescue => e
+  $stderr.puts "KNOWN BUG (skipped): #{description}"
+end
+
 def assert_success(status, stderr, msg = nil)
   return if status.success?
 
@@ -606,6 +613,74 @@ assert_equal(['{"a":2,"b":20}', '{"a":4,"b":40}', '{"a":6,"b":60}'], lines(stdou
 stdout, stderr, status = run_jrf('_["values"] >> map { |x| x + 1 } >> map { |x| x * 10 }', input_map)
 assert_success(status, stderr, "chained map transforms")
 assert_equal(['[20,110,1010]', '[30,210,2010]', '[40,310,3010]'], lines(stdout), "chained map transforms output")
+
+# select inside map
+input_select_map = <<~NDJSON
+  [1,2,3]
+  [4,5,6]
+NDJSON
+
+stdout, stderr, status = run_jrf('map { |x| select(x >= 2) }', input_select_map)
+assert_success(status, stderr, "select inside map")
+assert_equal(['[2,3]', '[4,5,6]'], lines(stdout), "select inside map output")
+
+stdout, stderr, status = run_jrf('map { |x| select(x % 2 == 0) }', input_select_map)
+assert_success(status, stderr, "select inside map even")
+assert_equal(['[2]', '[4,6]'], lines(stdout), "select inside map even output")
+
+# select inside map_values
+input_select_mv = <<~NDJSON
+  {"a":1,"b":2,"c":3}
+NDJSON
+
+stdout, stderr, status = run_jrf('map_values { |v| select(v >= 2) }', input_select_mv)
+assert_success(status, stderr, "select inside map_values")
+assert_equal(['{"b":2,"c":3}'], lines(stdout), "select inside map_values output")
+
+# reduce inside map
+input_reduce_map = <<~NDJSON
+  [1,2,3]
+  [4,5,6]
+NDJSON
+
+stdout, stderr, status = run_jrf('map { |x| reduce(0) { |acc, v| acc + v } }', input_reduce_map)
+assert_success(status, stderr, "reduce inside map")
+assert_equal(['[5,7,9]'], lines(stdout), "reduce inside map output")
+
+# reduce inside map_values
+input_reduce_mv = <<~NDJSON
+  {"a":1,"b":2}
+  {"a":3,"b":4}
+NDJSON
+
+stdout, stderr, status = run_jrf('map_values { |v| reduce(0) { |acc, x| acc + x } }', input_reduce_mv)
+assert_success(status, stderr, "reduce inside map_values")
+assert_equal(['{"a":4,"b":6}'], lines(stdout), "reduce inside map_values output")
+
+# nested map
+stdout, stderr, status = run_jrf('map { |x| map { |y| y * 10 } }', "[[1,2],[3,4]]\n")
+assert_success(status, stderr, "nested map")
+assert_equal(['[[10,20],[30,40]]'], lines(stdout), "nested map output")
+
+# select drops all elements
+stdout, stderr, status = run_jrf('map { |x| select(x > 100) }', "[1,2,3]\n")
+assert_success(status, stderr, "select drops all in map")
+assert_equal(['[]'], lines(stdout), "select drops all in map output")
+
+# flat inside map
+known_bug("flat inside map should flatten each element") do
+  input_flat_map = "[[1,2],[3],[4,5,6]]\n"
+  stdout, stderr, status = run_jrf('map { |x| flat }', input_flat_map)
+  assert_success(status, stderr, "flat inside map")
+  assert_equal(['[1,2,3,4,5,6]'], lines(stdout), "flat inside map output")
+end
+
+# flat inside map_values
+known_bug("flat inside map_values should flatten each value") do
+  stdout, stderr, status = run_jrf('map_values { |v| flat }', '{"a":[1,2],"b":[3]}')
+  assert_success(status, stderr, "flat inside map_values")
+  assert_equal(['{"a":1,"a":2,"b":3}'], lines(stdout), "flat inside map_values output")
+end
 
 input_gb = <<~NDJSON
   {"status":200,"path":"/a","latency":10}

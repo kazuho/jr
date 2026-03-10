@@ -25,16 +25,22 @@ module Jrf
 
     def initialize(obj = nil)
       @obj = obj
+      @stage_row = obj
       @__jrf_current_stage = nil
     end
 
     def reset(obj)
       @obj = obj
+      @stage_row = obj
       self
     end
 
+    def reset_obj(obj)
+      @obj = obj
+    end
+
     def _
-      @obj
+      @stage_row
     end
 
     def flat

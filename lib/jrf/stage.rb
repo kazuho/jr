@@ -65,8 +65,16 @@ module Jrf
       # Transformation mode (detected on first call)
       if @map_transforms[idx]
         case type
-        when :array then return collection.map(&block)
-        when :hash then return collection.transform_values(&block)
+        when :array
+          return collection.each_with_object([]) { |v, out|
+            result = with_scoped_obj(v) { block.call(v) }
+            out << result unless result.equal?(Control::DROPPED)
+          }
+        when :hash
+          return collection.each_with_object({}) { |(k, v), out|
+            result = with_scoped_obj(v) { block.call(v) }
+            out[k] = result unless result.equal?(Control::DROPPED)
+          }
         end
       end
 
@@ -77,18 +85,22 @@ module Jrf
         raise TypeError, "map expects Array, got #{collection.class}" unless collection.is_a?(Array)
         collection.each_with_index do |v, i|
           slot = map_reducer.slot(i)
-          with_scoped_reducers(slot.reducers) do
-            result = block.call(v)
-            slot.template ||= result
+          with_scoped_obj(v) do
+            with_scoped_reducers(slot.reducers) do
+              result = block.call(v)
+              slot.template ||= result
+            end
           end
         end
       when :hash
         raise TypeError, "map_values expects Hash, got #{collection.class}" unless collection.is_a?(Hash)
         collection.each do |k, v|
           slot = map_reducer.slot(k)
-          with_scoped_reducers(slot.reducers) do
-            result = block.call(v)
-            slot.template ||= result
+          with_scoped_obj(v) do
+            with_scoped_reducers(slot.reducers) do
+              result = block.call(v)
+              slot.template ||= result
+            end
           end
         end
       end
@@ -99,9 +111,13 @@ module Jrf
         @reducers[idx] = nil
         case type
         when :array
-          return map_reducer.slots.sort_by { |k, _| k }.map { |_, s| s.template }
+          return map_reducer.slots.sort_by { |k, _| k }
+            .map { |_, s| s.template }
+            .reject { |v| v.equal?(Control::DROPPED) }
         when :hash
-          return map_reducer.slots.transform_values(&:template)
+          return map_reducer.slots.each_with_object({}) { |(k, s), h|
+            h[k] = s.template unless s.template.equal?(Control::DROPPED)
+          }
         end
       end
 
@@ -134,6 +150,14 @@ module Jrf
     end
 
     private
+
+    def with_scoped_obj(obj)
+      saved = @ctx.instance_variable_get(:@obj)
+      @ctx.reset_obj(obj)
+      yield
+    ensure
+      @ctx.reset_obj(saved)
+    end
 
     def with_scoped_reducers(reducer_list)
       saved_reducers = @reducers
