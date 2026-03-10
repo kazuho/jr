@@ -1,11 +1,13 @@
 # frozen_string_literal: true
 
+require "optparse"
+
 require_relative "cli/runner"
+require_relative "version"
 
 module Jrf
   class CLI
     USAGE = "usage: jrf [options] 'STAGE >> STAGE >> ...'"
-
     HELP_TEXT = <<~'TEXT'
       usage: jrf [options] 'STAGE >> STAGE >> ...'
 
@@ -18,6 +20,7 @@ module Jrf
         --no-jit       do not enable YJIT, even when supported by the Ruby runtime
         --atomic-write-bytes N
                        group short outputs into atomic writes of up to N bytes
+        -V, --version  show version and exit
         -h, --help     show this help and exit
 
       Pipeline:
@@ -41,42 +44,40 @@ module Jrf
       pretty = false
       jit = true
       atomic_write_bytes = Runner::DEFAULT_OUTPUT_BUFFER_LIMIT
-
-      while argv.first&.start_with?("-")
-        case argv.first
-        when "-v", "--verbose"
-          verbose = true
-          argv.shift
-        when "--lax"
-          lax = true
-          argv.shift
-        when "-p", "--pretty"
-          pretty = true
-          argv.shift
-        when "--no-jit"
-          jit = false
-          argv.shift
-        when /\A--atomic-write-bytes=(.+)\z/
-          atomic_write_bytes = parse_atomic_write_bytes(Regexp.last_match(1), err)
-          return 1 unless atomic_write_bytes
-          argv.shift
-        when "--atomic-write-bytes"
-          argv.shift
-          atomic_write_bytes = parse_atomic_write_bytes(argv.shift, err)
-          return 1 unless atomic_write_bytes
-        when "-h", "--help"
-          out.puts HELP_TEXT
-          return 0
-        else
-          err.puts "unknown option: #{argv.first}"
-          err.puts USAGE
-          return 1
+      begin
+        parser = OptionParser.new do |opts|
+          opts.banner = USAGE
+          opts.on("-v", "--verbose", "print parsed stage expressions") { verbose = true }
+          opts.on("--lax", "allow multiline JSON texts; split inputs by whitespace (also detects JSON-SEQ RS 0x1e)") { lax = true }
+          opts.on("-p", "--pretty", "pretty-print JSON output instead of compact NDJSON") { pretty = true }
+          opts.on("--no-jit", "do not enable YJIT, even when supported by the Ruby runtime") { jit = false }
+          opts.on("--atomic-write-bytes N", Integer, "group short outputs into atomic writes of up to N bytes") do |value|
+            if value.positive?
+              atomic_write_bytes = value
+            else
+              raise OptionParser::InvalidArgument, "--atomic-write-bytes requires a positive integer"
+            end
+          end
+          opts.on("-V", "--version", "show version and exit") do
+            out.puts Jrf::VERSION
+            exit
+          end
+          opts.on("-h", "--help", "show this help and exit") do
+            out.puts HELP_TEXT
+            exit
+          end
         end
+
+        parser.order!(argv)
+      rescue OptionParser::ParseError => e
+        err.puts e.message
+        err.puts USAGE
+        exit 1
       end
 
       if argv.empty?
         err.puts USAGE
-        return 1
+        exit 1
       end
 
       expression = argv.shift
@@ -110,15 +111,6 @@ module Jrf
         pretty: pretty,
         atomic_write_bytes: atomic_write_bytes
       ).run(expression, verbose: verbose)
-      0
-    end
-
-    def self.parse_atomic_write_bytes(value, err)
-      bytes = Integer(value, exception: false)
-      return bytes if bytes && bytes.positive?
-
-      err.puts "--atomic-write-bytes requires a positive integer"
-      nil
     end
 
     def self.enable_yjit
