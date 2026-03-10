@@ -167,13 +167,13 @@ module Jrf
     def map(&block)
       raise ArgumentError, "map requires a block" unless block
 
-      @__jrf_current_stage.allocate_map(:array, @obj, &block)
+      @__jrf_current_stage.allocate_map(@obj, hash_args: :pair, &block)
     end
 
     def map_values(&block)
       raise ArgumentError, "map_values requires a block" unless block
 
-      @__jrf_current_stage.allocate_map(:hash, @obj, &block)
+      @__jrf_current_stage.allocate_map(@obj, hash_args: :value, method_name: "map_values", &block)
     end
 
     def group_by(key, &block)

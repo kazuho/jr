@@ -58,20 +58,20 @@ module Jrf
       ReducerToken.new(idx)
     end
 
-    def allocate_map(type, collection, &block)
+    def allocate_map(collection, hash_args:, method_name: "map", &block)
       idx = @cursor
       @cursor += 1
+      type = map_collection_type(collection, method_name)
 
       # Transformation mode (detected on first call)
       if @map_transforms[idx]
-        return transform_collection(type, collection, &block)
+        return transform_collection(type, collection, hash_args: hash_args, method_name: method_name, &block)
       end
 
       map_reducer = (@reducers[idx] ||= MapReducer.new(type))
 
       case type
       when :array
-        raise TypeError, "map expects Array, got #{collection.class}" unless collection.is_a?(Array)
         collection.each_with_index do |v, i|
           slot = map_reducer.slot(i)
           with_scoped_reducers(slot.reducers) do
@@ -80,11 +80,10 @@ module Jrf
           end
         end
       when :hash
-        raise TypeError, "map_values expects Hash, got #{collection.class}" unless collection.is_a?(Hash)
         collection.each do |k, v|
           slot = map_reducer.slot(k)
           with_scoped_reducers(slot.reducers) do
-            result = @ctx.send(:__jrf_with_current_input, v) { block.call(v) }
+            result = @ctx.send(:__jrf_with_current_input, v) { invoke_hash_map_block(block, k, v, hash_args) }
             slot.template ||= result
           end
         end
@@ -94,7 +93,7 @@ module Jrf
       if @mode.nil? && map_reducer.slots.values.all? { |s| s.reducers.empty? }
         @map_transforms[idx] = true
         @reducers[idx] = nil
-        return transformed_slots(type, map_reducer)
+        return transformed_slots(type, map_reducer, method_name: method_name)
       end
 
       ReducerToken.new(idx)
@@ -138,29 +137,25 @@ module Jrf
       @cursor = saved_cursor
     end
 
-    def transform_collection(type, collection, &block)
+    def transform_collection(type, collection, hash_args:, method_name:, &block)
       case type
       when :array
-        raise TypeError, "map expects Array, got #{collection.class}" unless collection.is_a?(Array)
-
         collection.each_with_object([]) do |value, result|
           mapped = @ctx.send(:__jrf_with_current_input, value) { block.call(value) }
           append_map_result(result, mapped)
         end
       when :hash
-        raise TypeError, "map_values expects Hash, got #{collection.class}" unless collection.is_a?(Hash)
-
         collection.each_with_object({}) do |(key, value), result|
-          mapped = @ctx.send(:__jrf_with_current_input, value) { block.call(value) }
+          mapped = @ctx.send(:__jrf_with_current_input, value) { invoke_hash_map_block(block, key, value, hash_args) }
           next if mapped.equal?(Control::DROPPED)
-          raise TypeError, "flat is not supported inside map_values" if mapped.is_a?(Control::Flat)
+          raise TypeError, "flat is not supported inside #{method_name}" if mapped.is_a?(Control::Flat)
 
           result[key] = mapped
         end
       end
     end
 
-    def transformed_slots(type, map_reducer)
+    def transformed_slots(type, map_reducer, method_name:)
       case type
       when :array
         map_reducer.slots
@@ -171,10 +166,29 @@ module Jrf
       when :hash
         map_reducer.slots.each_with_object({}) do |(key, slot), result|
           next if slot.template.equal?(Control::DROPPED)
-          raise TypeError, "flat is not supported inside map_values" if slot.template.is_a?(Control::Flat)
+          raise TypeError, "flat is not supported inside #{method_name}" if slot.template.is_a?(Control::Flat)
 
           result[key] = slot.template
         end
+      end
+    end
+
+    def map_collection_type(collection, method_name)
+      return :array if collection.is_a?(Array)
+      return :hash if collection.is_a?(Hash)
+
+      expected = method_name == "map_values" ? "Hash" : "Array or Hash"
+      raise TypeError, "#{method_name} expects #{expected}, got #{collection.class}"
+    end
+
+    def invoke_hash_map_block(block, key, value, hash_args)
+      case hash_args
+      when :pair
+        block.call(key, value)
+      when :value
+        block.call(value)
+      else
+        raise ArgumentError, "unsupported hash map args mode: #{hash_args.inspect}"
       end
     end
 

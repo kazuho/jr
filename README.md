@@ -26,7 +26,7 @@ jrf '_["msg"] >> reduce(nil) { |acc, v| acc ? "#{acc} #{v}" : v }'
 jrf 'map { |x| x + 1 }'
 
 # Transform object values
-jrf 'map_values { |v| v * 10 }'
+jrf 'map { |k, v| v * 10 }'
 
 # Flatten arrays into rows
 jrf '_["items"] >> flat'
@@ -216,12 +216,13 @@ jrf 'sort { |a, b| b["at"] <=> a["at"] } >> _["id"]'
 ```
 
 ### map { |x| ... }
+### map { |k, v| ... }
 
-Maps each element of an Array.
-Inside the block, `_` remains the surrounding row value; use the block parameter for the element.
+Maps each element of an Array or each entry of a Hash.
+Inside the block, `_` remains the surrounding row value; use the block parameter for the array element or the hash key/value pair.
 
 If the block is a plain expression, `map` behaves like a regular per-row transform.
-If the block calls reducers, each array position gets its own independent reducer instance across rows.
+If the block calls reducers, each array position or hash key gets its own independent reducer instance across rows.
 
 ```sh
 jrf 'map { |x| x + 1 }'
@@ -229,12 +230,18 @@ jrf 'map { |x| x + 1 }'
 jrf 'map { |x| sum(x) }'
 # [1,10], [2,20], [3,30] → [6,60]
 
+jrf 'map { |k, v| "#{k}=#{v}" }'
+
+jrf 'map { |k, v| sum(v) }'
+# {"a":1,"b":10}, {"a":2,"b":20} → {"a":3,"b":30}
+
 jrf '_["values"] >> map { |x| min(x) }'
 ```
 
 ### map_values { |v| ... }
 
-Maps each value of a Hash.
+Compatibility alias for mapping Hash values only.
+Equivalent to `map { |_k, v| ... }`.
 Inside the block, `_` remains the surrounding row value; use the block parameter for the value.
 
 If the block is a plain expression, `map_values` behaves like a regular per-row transform.
