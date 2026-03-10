@@ -751,6 +751,10 @@ stdout, stderr, status = run_jrf('map { |k, v| "#{k}:#{v}" }', input_map_values)
 assert_success(status, stderr, "map over hash transform")
 assert_equal(['["a:1","b:10"]', '["a:2","b:20"]', '["a:3","b:30"]'], lines(stdout), "map over hash transform output")
 
+stdout, stderr, status = run_jrf('map { |pair| pair }', input_map_values)
+assert_success(status, stderr, "map over hash single block arg")
+assert_equal(['[["a",1],["b",10]]', '[["a",2],["b",20]]', '[["a",3],["b",30]]'], lines(stdout), "map over hash single block arg output")
+
 stdout, stderr, status = run_jrf('map { |k, v| select(v >= 10 && k != "a") }', input_map_values)
 assert_success(status, stderr, "map over hash transform with select")
 assert_equal(['[10]', '[20]', '[30]'], lines(stdout), "map over hash transform with select output")
@@ -900,6 +904,10 @@ assert_equal([{"a" => 10, "b" => 20}], j.call([{"a" => 1, "b" => 2}]), "library 
 # map hash transform
 j = Jrf.new(proc { map { |k, v| "#{k}=#{v}" } })
 assert_equal([["a=1", "b=2"]], j.call([{"a" => 1, "b" => 2}]), "library map hash transform")
+
+# map hash single block arg
+j = Jrf.new(proc { map { |pair| pair } })
+assert_equal([[["a", 1], ["b", 2]]], j.call([{"a" => 1, "b" => 2}]), "library map hash single block arg")
 
 # map hash reduce
 j = Jrf.new(proc { map { |k, v| sum(v + k.length) } })

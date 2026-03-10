@@ -26,7 +26,7 @@ jrf '_["msg"] >> reduce(nil) { |acc, v| acc ? "#{acc} #{v}" : v }'
 jrf 'map { |x| x + 1 }'
 
 # Transform object values
-jrf 'map { |k, v| v * 10 }'
+jrf 'map_values { |v| v * 10 }'
 
 # Flatten arrays into rows
 jrf '_["items"] >> flat'
@@ -241,8 +241,7 @@ jrf '_["values"] >> map { |x| min(x) }'
 
 ### map_values { |v| ... }
 
-Compatibility alias for mapping Hash values only.
-Equivalent to `map { |_k, v| ... }`.
+Maps each value of a Hash and returns a Hash.
 Inside the block, `_` remains the surrounding row value; use the block parameter for the value.
 
 If the block is a plain expression, `map_values` behaves like a regular per-row transform.
