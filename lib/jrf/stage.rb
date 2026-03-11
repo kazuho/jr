@@ -53,8 +53,9 @@ module Jrf
 
     def allocate_reducer(value, initial:, finish: nil, &step_fn)
       idx = @cursor
-      finish_rows = finish || ->(acc) { [acc] }
+
       if @reducers[idx].nil?
+        finish_rows = finish || ->(acc) { [acc] }
         @reducers[idx] = Reducers.reduce(initial, finish: finish_rows, &step_fn)
         result = ReducerToken.new(idx)
       else
@@ -62,7 +63,7 @@ module Jrf
       end
 
       @reducers[idx].step(value)
-      @cursor += 1
+      @cursor = idx + 1
       result
     end
 
