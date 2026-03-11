@@ -17,7 +17,7 @@ module Jrf
             spec.fetch(:value),
             initial: reducer_initial_value(spec.fetch(:initial)),
             finish: spec[:finish],
-            &spec.fetch(:step)
+            step_fn: spec.fetch(:step)
           )
         end
       end
@@ -140,21 +140,24 @@ module Jrf
       percentages = scalar ? [percentage] : percentage.to_a
       percentages.each { |p| ctx.send(:validate_percentile!, p) }
 
-      finish =
-        if scalar
-          ->(values) { [ctx.send(:percentile_value, values.sort, percentages.first)] }
-        else
-          ->(values) {
-            sorted = values.sort
-            [percentages.map { |p| ctx.send(:percentile_value, sorted, p) }]
-          }
-        end
-
       {
         value: value,
-        initial: -> { [] },
-        finish: finish,
-        step: ->(acc, v) { v.nil? ? acc : (acc << v) }
+        initial: -> { [percentages, []] },
+        finish:
+          if scalar
+            ->((saved_percentages, values)) { [ctx.send(:percentile_value, values.sort, saved_percentages.first)] }
+          else
+            ->((saved_percentages, values)) {
+              sorted = values.sort
+              [saved_percentages.map { |p| ctx.send(:percentile_value, sorted, p) }]
+            }
+          end,
+        step: ->((saved_percentages, values), v) {
+          return [saved_percentages, values] if v.nil?
+
+          values << v
+          [saved_percentages, values]
+        }
       }
     end
 

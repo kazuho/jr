@@ -51,8 +51,9 @@ module Jrf
       (@mode == :reducer) ? Control::DROPPED : result
     end
 
-    def step_reduce(value, initial:, finish: nil, &step_fn)
+    def step_reduce(value, initial:, finish: nil, step_fn: nil, &step_block)
       idx = @cursor
+      step_fn ||= step_block
 
       if @reducers[idx].nil?
         finish_rows = finish || ->(acc) { [acc] }
