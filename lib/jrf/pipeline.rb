@@ -40,21 +40,19 @@ module Jrf
 
     def process_value(value, stages, idx = 0, &on_output)
       while idx < stages.length
-        out = stages[idx].call(value)
+        value = stages[idx].call(value)
 
-        if out.equal?(Control::DROPPED)
+        if value.equal?(Control::DROPPED)
           return
-        elsif out.is_a?(Control::Flat)
-          unless out.value.is_a?(Array)
-            raise TypeError, "flat expects Array, got #{out.value.class}"
+        elsif value.is_a?(Control::Flat)
+          value = value.value
+          unless value.is_a?(Array)
+            raise TypeError, "flat expects Array, got #{value.class}"
           end
-
-          out.value.each do |child|
+          value.each do |child|
             process_value(child, stages, idx + 1, &on_output)
           end
           return
-        else
-          value = out
         end
 
         idx += 1
