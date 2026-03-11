@@ -950,6 +950,30 @@ assert_equal([[5, 7]], j.call([{"a" => 1, "b" => 2}, {"a" => 2, "b" => 3}]), "li
 j = Jrf.new(proc { group_by(_["k"]) { count() } })
 assert_equal([{"x" => 2, "y" => 1}], j.call([{"k" => "x"}, {"k" => "x"}, {"k" => "y"}]), "library group_by")
 
+# reducer configuration is fixed by the first row
+j = Jrf.new(proc { percentile(_["a"], _["p"]) })
+assert_equal([2], j.call([{"a" => 1, "p" => 0.5}, {"a" => 2, "p" => [0.5, 1.0]}, {"a" => 3, "p" => [0.5, 1.0]}]), "library percentile configuration fixed by first row")
+
+counting_percentiles = Class.new do
+  include Enumerable
+
+  attr_reader :each_calls
+
+  def initialize(values)
+    @values = values
+    @each_calls = 0
+  end
+
+  def each(&block)
+    @each_calls += 1
+    @values.each(&block)
+  end
+end.new([0.25, 0.5, 1.0])
+
+j = Jrf.new(proc { percentile(_["a"], counting_percentiles) })
+assert_equal([[1, 2, 3]], j.call([{"a" => 1}, {"a" => 2}, {"a" => 3}]), "library percentile enumerable values")
+assert_equal(1, counting_percentiles.each_calls, "library percentile materializes enumerable once")
+
 # reducer then passthrough
 j = Jrf.new(
   proc { sum(_["a"]) },

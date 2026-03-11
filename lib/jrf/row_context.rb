@@ -136,25 +136,31 @@ module Jrf
     end
 
     define_reducer(:percentile) do |ctx, value, percentage, block: nil|
-      scalar = !percentage.is_a?(Enumerable)
-      percentages = scalar ? [percentage] : percentage.to_a
-      percentages.each { |p| ctx.send(:validate_percentile!, p) }
-
-      finish =
-        if scalar
-          ->(values) { [ctx.send(:percentile_value, values.sort, percentages.first)] }
-        else
-          ->(values) {
-            sorted = values.sort
-            [percentages.map { |p| ctx.send(:percentile_value, sorted, p) }]
-          }
-        end
-
       {
         value: value,
-        initial: -> { [] },
-        finish: finish,
-        step: ->(acc, v) { v.nil? ? acc : (acc << v) }
+        initial: {config: -> {
+          scalar = !percentage.is_a?(Enumerable)
+          percentages = scalar ? [percentage] : percentage.to_a
+          percentages.each { |p| ctx.send(:validate_percentile!, p) }
+          [scalar, percentages]
+        }, values: []},
+        finish: ->(state) {
+          scalar, percentages = state.fetch(:config)
+          sorted = state.fetch(:values).sort
+          if scalar
+            [ctx.send(:percentile_value, sorted, percentages.first)]
+          else
+            [percentages.map { |p| ctx.send(:percentile_value, sorted, p) }]
+          end
+        },
+        step: ->(state, v) {
+          config = state.fetch(:config)
+          state[:config] = config.call if config.respond_to?(:call)
+          return state if v.nil?
+
+          state.fetch(:values) << v
+          state
+        }
       }
     end
 
