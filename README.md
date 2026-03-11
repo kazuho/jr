@@ -39,6 +39,7 @@ jrf 'group_by(_["status"])'
 
 # Group by key and aggregate
 jrf 'group_by(_["item"]) { |row| sum(row["count"] * row["price"]) }'
+jrf 'group_by(_["group"]) { |row| percentile(row["score"], 0.01.step(0.99, 0.01)) }'
 ```
 
 ## WHY JRF?
