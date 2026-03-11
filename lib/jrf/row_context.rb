@@ -17,7 +17,7 @@ module Jrf
             spec.fetch(:value),
             initial: reducer_initial_value(spec.fetch(:initial)),
             finish: spec[:finish],
-            step_fn: spec.fetch(:step)
+            &spec.fetch(:step)
           )
         end
       end
@@ -136,27 +136,30 @@ module Jrf
     end
 
     define_reducer(:percentile) do |ctx, value, percentage, block: nil|
-      scalar = !percentage.is_a?(Enumerable)
-      percentages = scalar ? [percentage] : percentage.to_a
-      percentages.each { |p| ctx.send(:validate_percentile!, p) }
-
       {
         value: value,
-        initial: -> { [percentages, []] },
-        finish:
+        initial: {config: -> {
+          scalar = !percentage.is_a?(Enumerable)
+          percentages = scalar ? [percentage] : percentage.to_a
+          percentages.each { |p| ctx.send(:validate_percentile!, p) }
+          [scalar, percentages]
+        }, values: []},
+        finish: ->(state) {
+          scalar, percentages = state.fetch(:config)
+          sorted = state.fetch(:values).sort
           if scalar
-            ->((saved_percentages, values)) { [ctx.send(:percentile_value, values.sort, saved_percentages.first)] }
+            [ctx.send(:percentile_value, sorted, percentages.first)]
           else
-            ->((saved_percentages, values)) {
-              sorted = values.sort
-              [saved_percentages.map { |p| ctx.send(:percentile_value, sorted, p) }]
-            }
-          end,
-        step: ->((saved_percentages, values), v) {
-          return [saved_percentages, values] if v.nil?
+            [percentages.map { |p| ctx.send(:percentile_value, sorted, p) }]
+          end
+        },
+        step: ->(state, v) {
+          config = state.fetch(:config)
+          state[:config] = config.call if config.respond_to?(:call)
+          return state if v.nil?
 
-          values << v
-          [saved_percentages, values]
+          state.fetch(:values) << v
+          state
         }
       }
     end
