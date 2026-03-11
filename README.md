@@ -39,6 +39,7 @@ jrf 'group_by(_["status"])'
 
 # Group by key and aggregate
 jrf 'group_by(_["item"]) { |row| sum(row["count"] * row["price"]) }'
+jrf 'group_by(_["group"]) { |row| percentile(row["score"], 0.01.step(0.99, 0.01)) }'
 ```
 
 ## WHY JRF?
@@ -177,12 +178,13 @@ jrf 'select(_["status"] == 200) >> count()'
 
 ### percentile(expr, 0.95)
 ### percentile(expr, [0.1, 0.5, 0.9])
+### percentile(expr, 0.1.step(0.9, 0.4))
 
 Computes percentiles for `p` in `[0.0, 1.0]`.
 
 If a scalar is given as a percentile, emits the value as a scalar.
 
-If an array of percentiles is given, emits one array of values in the same order as the requested percentiles.
+If an enumerable of percentiles is given, emits one array of values in the same order as the requested percentiles.
 For example, with `[0.1, 0.5, 0.9]`, the output is `[p10_value, p50_value, p90_value]`.
 
 Example output:
