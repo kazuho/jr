@@ -17,5 +17,5 @@ Gem::Specification.new do |spec|
   spec.executables = ["jrf"]
   spec.add_dependency "oj", ">= 3.16"
 
-  spec.files = Dir.glob("{exe,lib,test}/*") + Dir.glob("lib/**/*") + %w[DESIGN.txt jrf.gemspec Gemfile Rakefile]
+  spec.files = Dir.glob("{exe,lib,test}/*") + Dir.glob("lib/**/*") + %w[DESIGN.txt jrf.gemspec Gemfile Rakefile].select { |path| File.file?(path) }
 end
