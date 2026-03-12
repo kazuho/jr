@@ -23,9 +23,11 @@ jrf 'percentile(_["ttlb"], 0.50)'
 jrf '_["msg"] >> reduce(nil) { |acc, v| acc ? "#{acc} #{v}" : v }'
 
 # Transform array elements
+jrf 'map { |x| select(x >= 1) }'
 jrf 'map { |x| x + 1 }'
 
 # Transform object values
+jrf 'map_values { |v| select(v >= 1) }'
 jrf 'map_values { |v| v * 10 }'
 
 # Flatten arrays into rows
