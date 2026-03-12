@@ -278,6 +278,31 @@ jrf 'group_by(_["status"]) { |row| average(row["latency"]) }'
 # → {"200":42.5,"404":120.0}
 ```
 
+### LIMITATIONS
+
+Aggregation built-ins accept ordinary Ruby expressions as arguments, but their results are not ordinary Ruby values during evaluation. They can appear as standalone values in reducer templates such as a stage result, an array, a hash, or a reducer-aware block, but they cannot be combined with operators or wrapped inside arbitrary Ruby expressions, leading to an error or an incorrect result.
+
+Good examples:
+```ruby
+count()
+sum(_["x"])
+sum(2 * _["x"])
+sum(_["count"] * _["price"])
+average(_.abs)
+{total: sum(_["x"]), n: count()}
+[count(), sum(_["x"])]
+group_by(_["k"]) { {total: sum(_["x"]), n: count()} }
+map_values { |v| sum(v) }
+```
+
+Bad examples:
+```ruby
+1 + count()            # use: count() >> _ + 1
+2 * sum(_["x"])        # use: sum(2 * _["x"])
+sum(_["x"]).round      # use: sum(_["x"]) >> _.round
+[1 + count()]          # use: count() >> [_ + 1]
+```
+
 ## RUBY LIBRARY
 
 `jrf` can also be used as a Ruby library. Create a pipeline with `Jrf.new`, passing one or more procs as stages. The returned object is callable.
