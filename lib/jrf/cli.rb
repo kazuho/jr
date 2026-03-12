@@ -17,6 +17,8 @@ module Jrf
         -v, --verbose  print parsed stage expressions
         --lax          allow multiline JSON texts; split inputs by whitespace (also detects JSON-SEQ RS 0x1e)
         -p, --pretty   pretty-print JSON output instead of compact NDJSON
+        -r, --require LIBRARY
+                       require LIBRARY before evaluating stages
         --no-jit       do not enable YJIT, even when supported by the Ruby runtime
         --atomic-write-bytes N
                        group short outputs into atomic writes of up to N bytes
@@ -43,6 +45,7 @@ module Jrf
       lax = false
       pretty = false
       jit = true
+      required_libraries = []
       atomic_write_bytes = Runner::DEFAULT_OUTPUT_BUFFER_LIMIT
       begin
         parser = OptionParser.new do |opts|
@@ -50,6 +53,7 @@ module Jrf
           opts.on("-v", "--verbose", "print parsed stage expressions") { verbose = true }
           opts.on("--lax", "allow multiline JSON texts; split inputs by whitespace (also detects JSON-SEQ RS 0x1e)") { lax = true }
           opts.on("-p", "--pretty", "pretty-print JSON output instead of compact NDJSON") { pretty = true }
+          opts.on("-r", "--require LIBRARY", "require LIBRARY before evaluating stages") { |library| required_libraries << library }
           opts.on("--no-jit", "do not enable YJIT, even when supported by the Ruby runtime") { jit = false }
           opts.on("--atomic-write-bytes N", Integer, "group short outputs into atomic writes of up to N bytes") do |value|
             if value.positive?
@@ -82,6 +86,7 @@ module Jrf
 
       expression = argv.shift
       enable_yjit if jit
+      required_libraries.each { |library| require library }
 
       inputs = Enumerator.new do |y|
         if argv.empty?

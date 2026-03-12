@@ -9,6 +9,7 @@ jrf 'STAGE >> STAGE >> STAGE ...' file1.ndjson file2.ndjson.gz
 jrf --lax 'STAGE >> STAGE >> STAGE ...' < multiline.json
 jrf --lax 'STAGE >> STAGE >> STAGE ...' < file.jsonseq
 jrf --pretty '_' file.json file.ndjson
+jrf --require ./my_helpers.rb 'my_method(_["value"])'
 jrf --help
 
 # Extract
@@ -66,10 +67,11 @@ jrf 'select(_["path"] =~ /^\/api/)'
 jrf 'sort(_["name"].downcase)'
 ```
 
-When built-ins alone aren't enough, Ruby blocks let you extend the logic naturally:
+When built-ins alone aren't enough, Ruby blocks let you extend the logic naturally; custom ruby code can be preloaded as well:
 
 ```sh
 jrf 'group_by(_["status"]) { |row| average(row["latency"]) }'
+jrf --require ./my_helpers.rb 'my_method(_)'
 ```
 
 Ruby is also fast and memory-efficient: jrf’s core logic and user-supplied expressions are optimized together by the same [JIT](https://docs.ruby-lang.org/en/3.4/yjit/yjit_md.html), strings are copied only when necessary, and Ruby comes with a [heavily optimized JSON parser](https://byroot.github.io/ruby/json/2024/12/15/optimizing-ruby-json-part-1.html). As a result, `jrf` outperforms `jq` — here over 3x on a simple aggregation:
