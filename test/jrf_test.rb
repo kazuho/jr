@@ -145,6 +145,7 @@ assert_includes(stdout, "usage: jrf [options] 'STAGE >> STAGE >> ...'")
 assert_includes(stdout, "JSON filter with the power and speed of Ruby.")
 assert_includes(stdout, "--lax")
 assert_includes(stdout, "--pretty")
+assert_includes(stdout, "--require LIBRARY")
 assert_includes(stdout, "--no-jit")
 assert_includes(stdout, "-V")
 assert_includes(stdout, "--version")
@@ -202,6 +203,19 @@ assert_equal(%w[123 456], lines(stdout), "atomic write bytes equals form output"
 stdout, stderr, status = Open3.capture3("./exe/jrf", "--atomic-write-bytes", "0", '_["hello"]', stdin_data: input_hello)
 assert_failure(status, "atomic write bytes rejects zero")
 assert_includes(stderr, "--atomic-write-bytes requires a positive integer")
+
+Dir.mktmpdir do |dir|
+  helper = File.join(dir, "helpers.rb")
+  File.write(helper, <<~RUBY)
+    def double(value)
+      value * 2
+    end
+  RUBY
+
+  stdout, stderr, status = Open3.capture3("./exe/jrf", "-r", helper, 'double(_["hello"])', stdin_data: input_hello)
+  assert_success(status, stderr, "require helper option")
+  assert_equal(%w[246 912], lines(stdout), "require helper option output")
+end
 
 if defined?(RubyVM::YJIT) && RubyVM::YJIT.respond_to?(:enabled?)
   yjit_probe = "{\"probe\":1}\n"
