@@ -21,5 +21,4 @@ jobs:
 
       - name: Run tests
         run: |
-          ruby test/jrf_test.rb
-          rake test
+          bundle exec rake test
