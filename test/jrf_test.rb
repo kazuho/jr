@@ -144,7 +144,7 @@ assert_success(status, stderr, "help option")
 assert_includes(stdout, "usage: jrf [options] 'STAGE >> STAGE >> ...'")
 assert_includes(stdout, "JSON filter with the power and speed of Ruby.")
 assert_includes(stdout, "--lax")
-assert_includes(stdout, "--pretty")
+assert_includes(stdout, "--output")
 assert_includes(stdout, "--require LIBRARY")
 assert_includes(stdout, "--no-jit")
 assert_includes(stdout, "-V")
@@ -258,7 +258,7 @@ Dir.mktmpdir do |dir|
   assert_equal(%w[10 20 50], lines(stdout), "multiple compressed input output")
 end
 
-stdout, stderr, status = run_jrf('_', input_hello, "--pretty")
+stdout, stderr, status = run_jrf('_', input_hello, "-o", "pretty")
 assert_success(status, stderr, "pretty output")
 assert_equal(
   [
@@ -271,6 +271,46 @@ assert_equal(
   ],
   lines(stdout),
   "pretty output lines"
+)
+
+# tsv output: hash of arrays
+input_table_hash = '{"a":[1,2],"b":[3,4]}'
+stdout, stderr, status = run_jrf('_', input_table_hash, "-o", "tsv")
+assert_success(status, stderr, "tsv output hash of arrays")
+assert_equal(
+  ["a\t1\t2", "b\t3\t4"],
+  lines(stdout),
+  "tsv output hash of arrays"
+)
+
+# tsv output: array of arrays
+input_table_array = '[[1,"hello",true],[2,"world",false]]'
+stdout, stderr, status = run_jrf('_', input_table_array, "-o", "tsv")
+assert_success(status, stderr, "tsv output array of arrays")
+assert_equal(
+  ["1\thello\ttrue", "2\tworld\tfalse"],
+  lines(stdout),
+  "tsv output array of arrays"
+)
+
+# tsv output: hash of scalars
+input_table_scalar = '{"foo":"bar","baz":42}'
+stdout, stderr, status = run_jrf('_', input_table_scalar, "-o", "tsv")
+assert_success(status, stderr, "tsv output hash of scalars")
+assert_equal(
+  ["foo\tbar", "baz\t42"],
+  lines(stdout),
+  "tsv output hash of scalars"
+)
+
+# tsv output: nested values rendered as JSON
+input_table_nested = '{"a":[[1,2],[3,4]],"b":[[5,6],[7,8]]}'
+stdout, stderr, status = run_jrf('_', input_table_nested, "-o", "tsv")
+assert_success(status, stderr, "tsv output nested arrays as JSON")
+assert_equal(
+  ["a\t[1,2]\t[3,4]", "b\t[5,6]\t[7,8]"],
+  lines(stdout),
+  "tsv output nested arrays as JSON"
 )
 
 input_regex = <<~NDJSON

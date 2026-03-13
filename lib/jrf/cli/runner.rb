@@ -28,12 +28,12 @@ module Jrf
         end
       end
 
-      def initialize(inputs:, out: $stdout, err: $stderr, lax: false, pretty: false, atomic_write_bytes: DEFAULT_OUTPUT_BUFFER_LIMIT)
+      def initialize(inputs:, out: $stdout, err: $stderr, lax: false, output_format: :json, atomic_write_bytes: DEFAULT_OUTPUT_BUFFER_LIMIT)
         @inputs = inputs
         @out = out
         @err = err
         @lax = lax
-        @pretty = pretty
+        @output_format = output_format
         @atomic_write_bytes = atomic_write_bytes
         @output_buffer = +""
       end
@@ -49,8 +49,13 @@ module Jrf
         pipeline = Pipeline.new(*blocks)
 
         input_enum = Enumerator.new { |y| each_input_value { |v| y << v } }
-        pipeline.call(input_enum) do |value|
-          emit_output(value)
+
+        if @output_format == :tsv
+          values = []
+          pipeline.call(input_enum) { |value| values << value }
+          emit_tsv(values)
+        else
+          pipeline.call(input_enum) { |value| emit_output(value) }
         end
       ensure
         write_output(@output_buffer)
@@ -109,7 +114,54 @@ module Jrf
       end
 
       def emit_output(value)
-        record = (@pretty ? JSON.pretty_generate(value) : JSON.generate(value)) << "\n"
+        record = (@output_format == :pretty ? JSON.pretty_generate(value) : JSON.generate(value)) << "\n"
+        buffer_output(record)
+      end
+
+      def emit_tsv(values)
+        rows = values.flat_map { |value| value_to_rows(value) }
+        rows.each do |row|
+          buffer_output(row.join("\t") << "\n")
+        end
+      end
+
+      def value_to_rows(value)
+        case value
+        when Hash
+          value.map { |k, v|
+            case v
+            when Array
+              [format_cell(k)] + v.map { |e| format_cell(e) }
+            else
+              [format_cell(k), format_cell(v)]
+            end
+          }
+        when Array
+          value.map { |row|
+            case row
+            when Array
+              row.map { |e| format_cell(e) }
+            else
+              [format_cell(row)]
+            end
+          }
+        else
+          [[format_cell(value)]]
+        end
+      end
+
+      def format_cell(value)
+        case value
+        when nil
+          "null"
+        when Numeric, String, true, false
+          value.to_s
+        else
+          JSON.generate(value)
+        end
+      end
+
+      def buffer_output(record)
         if @output_buffer.bytesize + record.bytesize <= @atomic_write_bytes
           @output_buffer << record
         else
