@@ -227,6 +227,33 @@ class CliRunnerTest < JrfTestCase
     assert_equal(["a\t[1,2]\t[3,4]", "b\t[5,6]\t[7,8]"], lines(stdout), "tsv output nested arrays as JSON")
   end
 
+  def test_regex_and_parser_boundaries
+    input_regex = <<~NDJSON
+      {"foo":{"bar":"ok"},"x":50}
+      {"foo":{"bar":"ng"},"x":70}
+    NDJSON
+
+    stdout, stderr, status = run_jrf('select(/ok/.match(_["foo"]["bar"])) >> _["x"]', input_regex)
+    assert_success(status, stderr, "regex in select")
+    assert_equal(%w[50], lines(stdout), "regex filter output")
+
+    input_split = <<~NDJSON
+      {"x":1}
+    NDJSON
+
+    stdout, stderr, status = run_jrf('[1 >> 2] >> _', input_split)
+    assert_success(status, stderr, "no split inside []")
+    assert_equal(['[0]'], lines(stdout), "no split inside [] output")
+
+    stdout, stderr, status = run_jrf('{a: 1 >> 2} >> _[:a]', input_split)
+    assert_success(status, stderr, "no split inside {}")
+    assert_equal(%w[0], lines(stdout), "no split inside {} output")
+
+    stdout, stderr, status = run_jrf('(-> { 1 >> 2 }).call >> _ + 1', input_split)
+    assert_success(status, stderr, "no split inside block")
+    assert_equal(%w[1], lines(stdout), "no split inside block output")
+  end
+
   def test_flat_and_reducers
     input = <<~NDJSON
       {"foo":1,"x":5}
@@ -316,6 +343,34 @@ class CliRunnerTest < JrfTestCase
     stdout, stderr, status = run_jrf('sum(2 * _["foo"])', input)
     assert_success(status, stderr, "sum with literal on left")
     assert_equal(%w[20], lines(stdout), "sum with literal on left output")
+
+    stdout, stderr, status = run_jrf('select(_["x"] > 1000) >> sum(_["foo"])', input)
+    assert_success(status, stderr, "sum no matches")
+    assert_equal([], lines(stdout), "sum no matches output")
+
+    stdout, stderr, status = run_jrf('select(_["x"] > 1000) >> count()', input)
+    assert_success(status, stderr, "count no matches")
+    assert_equal([], lines(stdout), "count no matches output")
+
+    stdout, stderr, status = run_jrf('select(_["x"] > 1000) >> count(_["foo"])', input)
+    assert_success(status, stderr, "count(expr) no matches")
+    assert_equal([], lines(stdout), "count(expr) no matches output")
+
+    stdout, stderr, status = run_jrf('select(_["x"] > 1000) >> average(_["foo"])', input)
+    assert_success(status, stderr, "average no matches")
+    assert_equal([], lines(stdout), "average no matches output")
+
+    stdout, stderr, status = run_jrf('select(_["x"] > 1000) >> stdev(_["foo"])', input)
+    assert_success(status, stderr, "stdev no matches")
+    assert_equal([], lines(stdout), "stdev no matches output")
+
+    stdout, stderr, status = run_jrf('select(_["x"] > 1000) >> min(_["foo"])', input)
+    assert_success(status, stderr, "min no matches")
+    assert_equal([], lines(stdout), "min no matches output")
+
+    stdout, stderr, status = run_jrf('select(_["x"] > 1000) >> max(_["foo"])', input)
+    assert_success(status, stderr, "max no matches")
+    assert_equal([], lines(stdout), "max no matches output")
 
     stdout, stderr, status = run_jrf('sum(_["foo"]) >> _ + 1', input)
     assert_success(status, stderr, "reduce in middle")
