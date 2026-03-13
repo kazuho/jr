@@ -279,7 +279,7 @@ Inside the block, `_` remains the surrounding row value; use the block parameter
 
 ```sh
 # normalize values by their sum
-jrf '[_, apply { |x| sum(x) }] >> _[0].map { |x| x.to_f / _[1] }'
+jrf 'total = apply { |x| sum(x) }; map { |x| x.to_f / total }'
 # [3,7] → [0.3,0.7]
 
 # aggregate a nested array
