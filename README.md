@@ -107,6 +107,7 @@ Give it a try — install via RubyGems: `gem install jrf`
 Within each stage, the current JSON value is available as `_`, and the following built-in functions are provided.
 Inside nested block contexts such as `map`, `map_values`, and `group_by`, `_` remains the surrounding row value, while implicit-input built-ins operate on the current target object for that block.
 For aggregation functions, `nil` values are ignored.
+Examples below use `input → output` comments, and those examples are intended to be testable.
 
 ### select(predicate)
 
@@ -114,6 +115,7 @@ Filters rows. If predicate is true, the current value passes through; if false, 
 
 ```sh
 jrf 'select(_["status"] == 200) >> _["path"]'
+# {"status":200,"path":"/ok"}, {"status":404,"path":"/ng"} → "/ok"
 ```
 
 ### flat
@@ -122,6 +124,7 @@ Expands an Array into multiple rows, one output row per element.
 
 ```sh
 jrf '_["items"] >> flat'
+# {"items":[1,2]}, {"items":[3]}, {"items":[]} → 1, 2, 3
 ```
 
 ### group
@@ -133,7 +136,9 @@ Collects values into one Array. This is the opposite of `flat`.
 
 ```sh
 jrf '_["id"] >> group'
+# {"id":1}, {"id":2}, {"id":3} → [1,2,3]
 jrf 'group(_["id"])'
+# {"id":1}, {"id":2}, {"id":3} → [1,2,3]
 ```
 
 ### average(expr)
@@ -142,6 +147,7 @@ Computes the average value across rows.
 
 ```sh
 jrf '_["latency"] >> average(_)'
+# {"latency":10}, {"latency":30} → 20.0
 ```
 
 ### min(expr)
@@ -150,6 +156,7 @@ Computes the minimum value across rows.
 
 ```sh
 jrf '_["latency"] >> min(_)'
+# {"latency":10}, {"latency":30} → 10
 ```
 
 ### max(expr)
@@ -158,6 +165,7 @@ Computes the maximum value across rows.
 
 ```sh
 jrf '_["latency"] >> max(_)'
+# {"latency":10}, {"latency":30} → 30
 ```
 
 ### stdev(expr)
@@ -166,6 +174,7 @@ Computes the standard deviation across rows.
 
 ```sh
 jrf '_["latency"] >> stdev(_)'
+# {"latency":1}, {"latency":3} → 1.0
 ```
 
 ### sum(expr)
@@ -174,6 +183,7 @@ Computes the sum across rows.
 
 ```sh
 jrf '_["price"] * _["unit"] >> sum(_)'
+# {"price":10,"unit":2}, {"price":5,"unit":4} → 40
 ```
 
 ### count()
@@ -184,7 +194,9 @@ jrf '_["price"] * _["unit"] >> sum(_)'
 
 ```sh
 jrf 'count()'
+# {"status":200}, {"status":404}, {"status":200} → 3
 jrf 'select(_["status"] == 200) >> count()'
+# {"status":200}, {"status":404}, {"status":200} → 2
 ```
 
 ### count_if(condition)
@@ -193,7 +205,9 @@ Counts rows where `condition` is truthy.
 
 ```sh
 jrf 'count_if(_["status"] == 200)'
+# {"status":200}, {"status":404}, {"status":200} → 2
 jrf '[count_if(_["x"] > 0), count_if(_["x"] < 0)]'
+# {"x":1}, {"x":-2}, {"x":3} → [2,1]
 ```
 
 ### percentile(expr, 0.95)
@@ -207,9 +221,11 @@ If a scalar is given as a percentile, emits the value as a scalar.
 If an enumerable of percentiles is given, emits one array of values in the same order as the requested percentiles.
 For example, with `[0.1, 0.5, 0.9]`, the output is `[p10_value, p50_value, p90_value]`.
 
-Example output:
-```json
-[38, 123, 469]
+```sh
+jrf 'percentile(_["latency"], 0.5)'
+# {"latency":10}, {"latency":20}, {"latency":30} → 20
+jrf 'percentile(_["latency"], [0.25, 0.5, 1.0])'
+# {"latency":10}, {"latency":20}, {"latency":30}, {"latency":40} → [10,20,40]
 ```
 
 ### reduce(initial) { |acc, v| ... }
@@ -219,7 +235,9 @@ Most built-in aggregations are convenience wrappers around `reduce`, and many re
 
 ```sh
 jrf '_["msg"] >> reduce(nil) { |acc, v| acc ? "#{acc} #{v}" : v }'
+# {"msg":"hello"}, {"msg":"world"} → "hello world"
 jrf '_["count"] >> reduce(0) { |acc, v| acc + v }'
+# {"count":10}, {"count":20} → 30
 ```
 
 ### sort(key_expr)
@@ -233,8 +251,11 @@ Wit no argument, rows are sorted by the current target value. This is most usefu
 
 ```sh
 jrf 'sort(_["at"]) >> _["id"]'
+# {"id":"b","at":2}, {"id":"a","at":1}, {"id":"c","at":3} → "a", "b", "c"
 jrf 'sort { |a, b| b["at"] <=> a["at"] } >> _["id"]'
+# {"id":"b","at":2}, {"id":"a","at":1}, {"id":"c","at":3} → "c", "b", "a"
 jrf 'sort'
+# 3, 1, 2 → 1, 2, 3
 ```
 
 ### map { |x| ... }
@@ -249,6 +270,7 @@ If the block uses aggregations (e.g. `sum`), each array position (or hash key) g
 
 ```sh
 jrf 'map { |x| x + 1 }'
+# [1,10], [2,20] → [2,11], [3,21]
 
 jrf 'map { |x| sum(x) }'
 # [1,10], [2,20], [3,30] → [6,60]
@@ -260,8 +282,10 @@ jrf 'map { |(k, v)| sum(v) }'
 # {"a":1,"b":10}, {"a":2,"b":20} → [3,30]
 
 jrf '_["values"] >> map { |x| min(x) }'
+# {"values":[3,30]}, {"values":[1,10]}, {"values":[2,20]} → [1,10]
 
 jrf 'map(_["items"]) { |x| x * 2 }'
+# {"items":[1,2,3]} → [2,4,6]
 ```
 
 ### map_values { |v| ... }
@@ -276,6 +300,7 @@ If the block uses aggregations, each key gets its own independent accumulator ac
 
 ```sh
 jrf 'map_values { |v| v * 10 }'
+# {"a":1,"b":2} → {"a":10,"b":20}
 
 jrf 'map_values { |v| sum(v) }'
 # {"a":1,"b":10}, {"a":2,"b":20} → {"a":3,"b":30}
@@ -289,6 +314,8 @@ By default operates on the current value; pass an explicit collection to operate
 Unlike `map` which accumulates across rows (the same position across multiple inputs), `apply` aggregates within one value (all elements of a single array), completing immediately.
 Inside the block, `_` remains the surrounding row value; use the block parameter for each element.
 
+For example:
+
 ```sh
 # normalize values by their sum
 jrf 'total = apply { |x| sum(x) }; map { |x| x.to_f / total }'
@@ -296,6 +323,7 @@ jrf 'total = apply { |x| sum(x) }; map { |x| x.to_f / total }'
 
 # aggregate a nested array
 jrf 'map { |o| [o["name"], apply(o["scores"]) { |x| average(x) }] }'
+# [{"name":"a","scores":[1,2]},{"name":"b","scores":[10,20]}] → [["a",1.5],["b",15.0]]
 ```
 
 ### group_by(key_expr)
@@ -310,13 +338,13 @@ Inside the block, `_` still refers to the surrounding row, and the current row i
 
 ```sh
 jrf 'group_by(_["status"])'
-# → {"200":[...rows...],"404":[...rows...]}
+# {"status":200,"path":"/a"}, {"status":404,"path":"/b"}, {"status":200,"path":"/c"} → {"200":[{"status":200,"path":"/a"},{"status":200,"path":"/c"}],"404":[{"status":404,"path":"/b"}]}
 
 jrf 'group_by(_["item"]) { |row| sum(row["count"] * row["price"]) }'
-# → {"Apple":1250,"Orange":830}
+# {"item":"Apple","count":2,"price":100}, {"item":"Orange","count":3,"price":50}, {"item":"Apple","count":1,"price":100} → {"Apple":300,"Orange":150}
 
 jrf 'group_by(_["status"]) { |row| average(row["latency"]) }'
-# → {"200":42.5,"404":120.0}
+# {"status":200,"latency":10}, {"status":404,"latency":50}, {"status":200,"latency":30} → {"200":20.0,"404":50.0}
 ```
 
 ### LIMITATIONS
