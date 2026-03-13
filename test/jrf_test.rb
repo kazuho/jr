@@ -51,6 +51,39 @@ def lines(str)
   str.lines.map(&:strip).reject(&:empty?)
 end
 
+def json_stream_to_ndjson(text)
+  JSON.parse("[#{text}]").map { |value| "#{JSON.generate(value)}\n" }.join
+end
+
+def extract_readme_examples(path, section:)
+  content = File.read(path)
+  section_match = content.match(/^## #{Regexp.escape(section)}\n(.*?)(?=^## |\z)/m)
+  raise "section not found: #{section}" unless section_match
+
+  examples = []
+  section_text = section_match[1]
+  section_text.scan(/```sh\n(.*?)```/m) do |block_match|
+    block = block_match.first
+    lines = block.lines.map(&:chomp)
+    index = 0
+    while index < lines.length
+      line = lines[index]
+      if (command_match = line.match(/\Ajrf '(.*)'\z/))
+        comment = lines[index + 1]
+        if comment && (example_match = comment.match(/\A# (.+) → (.+)\z/))
+          examples << {
+            expr: command_match[1],
+            input: json_stream_to_ndjson(example_match[1]),
+            output: lines(json_stream_to_ndjson(example_match[2]))
+          }
+        end
+      end
+      index += 1
+    end
+  end
+  examples
+end
+
 class RecordingRunner < Jrf::CLI::Runner
   attr_reader :writes
 
@@ -88,6 +121,15 @@ class ChunkedSource
       chunk
     end
   end
+end
+
+readme_examples = extract_readme_examples("./README.md", section: "BUILT-IN FUNCTIONS")
+raise "expected README built-in examples" if readme_examples.empty?
+
+readme_examples.each do |example|
+  stdout, stderr, status = run_jrf(example[:expr], example[:input])
+  assert_success(status, stderr, "README example #{example[:expr]}")
+  assert_equal(example[:output], lines(stdout), "README example output #{example[:expr]}")
 end
 
 File.chmod(0o755, "./exe/jrf")
