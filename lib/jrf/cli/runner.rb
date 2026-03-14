@@ -51,65 +51,52 @@ module Jrf
       end
 
       def run(expression, verbose: false)
-        parsed = PipelineParser.new(expression).parse
-        stages = parsed[:stages]
-        dump_stages(stages) if verbose
-
-        blocks = stages.map { |stage|
-          eval("proc { #{stage[:src]} }", nil, "(jrf stage)", 1) # rubocop:disable Security/Eval
-        }
-        pipeline = Pipeline.new(*blocks)
-
-        input_enum = Enumerator.new { |y| each_input_value { |v| y << v } }
-
-        if @output_format == :tsv
-          values = []
-          pipeline.call(input_enum) { |value| values << value }
-          emit_tsv(values)
-        else
-          pipeline.call(input_enum) { |value| emit_output(value) }
-        end
+        blocks = build_stage_blocks(expression, verbose: verbose)
+        emit_values(apply_pipeline(blocks, each_input_enum))
       ensure
         write_output(@output_buffer)
       end
 
       def run_parallel(expression, file_paths, num_workers, verbose: false)
-        parsed = PipelineParser.new(expression).parse
-        stages = parsed[:stages]
-        dump_stages(stages) if verbose
-
-        blocks = stages.map { |stage|
-          eval("proc { #{stage[:src]} }", nil, "(jrf stage)", 1) # rubocop:disable Security/Eval
-        }
+        blocks = build_stage_blocks(expression, verbose: verbose)
 
         # Parallelize the longest map-only prefix; reducers stay in the parent.
         split_index = classify_parallel_stages(blocks, file_paths)
 
         if split_index.nil? || split_index == 0
           # No map stages or all stages are reducers — run single-threaded
-          pipeline = Pipeline.new(*blocks)
-          input_enum = Enumerator.new { |y| each_input_value { |v| y << v } }
-          run_pipeline(pipeline, input_enum)
+          emit_values(apply_pipeline(blocks, each_input_enum))
           return
         end
 
         map_blocks = blocks[0...split_index]
         reduce_blocks = blocks[split_index..] || []
-        run_parallel_pipeline(map_blocks, reduce_blocks, file_paths, num_workers)
+        input_enum = parallel_map_enum(map_blocks, file_paths, num_workers)
+        emit_values(reduce_blocks.empty? ? input_enum : apply_pipeline(reduce_blocks, input_enum))
       ensure
         write_output(@output_buffer)
       end
 
       private
 
-      def run_pipeline(pipeline, input_enum)
-        if @output_format == :tsv
-          values = []
-          pipeline.call(input_enum) { |value| values << value }
-          emit_tsv(values)
-        else
-          pipeline.call(input_enum) { |value| emit_output(value) }
+      def build_stage_blocks(expression, verbose:)
+        parsed = PipelineParser.new(expression).parse
+        stages = parsed[:stages]
+        dump_stages(stages) if verbose
+        stages.map { |stage|
+          eval("proc { #{stage[:src]} }", nil, "(jrf stage)", 1) # rubocop:disable Security/Eval
+        }
+      end
+
+      def apply_pipeline(blocks, input_enum)
+        pipeline = Pipeline.new(*blocks)
+        Enumerator.new do |y|
+          pipeline.call(input_enum) { |value| y << value }
         end
+      end
+
+      def each_input_enum
+        Enumerator.new { |y| each_input_value { |v| y << v } }
       end
 
       def classify_parallel_stages(blocks, file_paths)
@@ -248,18 +235,13 @@ module Jrf
         children
       end
 
-      def run_parallel_pipeline(map_blocks, reduce_blocks, file_paths, num_workers)
+      def parallel_map_enum(map_blocks, file_paths, num_workers)
         children = nil
-        input_enum = Enumerator.new do |y|
+        Enumerator.new do |y|
           children = run_parallel_worker_pool(map_blocks, file_paths, num_workers) { |line| y << JSON.parse(line) }
+        ensure
+          wait_for_parallel_children(children) if children
         end
-        if reduce_blocks.empty?
-          emit_values(input_enum)
-        else
-          run_pipeline(Pipeline.new(*reduce_blocks), input_enum)
-        end
-      ensure
-        wait_for_parallel_children(children) if children
       end
 
       def each_parallel_source_value(source)
