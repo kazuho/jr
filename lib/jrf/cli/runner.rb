@@ -47,39 +47,41 @@ module Jrf
         end
 
         def finish!
-          compact!
+          unless @offset.zero?
+            if @offset == @buf.bytesize
+              @buf.clear
+            else
+              @buf = @buf.byteslice(@offset..)
+            end
+            @offset = 0
+          end
           raise IOError, "truncated parallel frame from worker" unless @buf.empty?
         end
 
         private
 
         def next_payload
-          return compact_and_yield_nil if @buf.bytesize - @offset < PARALLEL_FRAME_HEADER_BYTES
+          if @buf.bytesize - @offset < PARALLEL_FRAME_HEADER_BYTES
+            if @offset > 0
+              @buf = @buf.byteslice(@offset..) || +""
+              @offset = 0
+            end
+            return nil
+          end
 
           payload_len = @buf.byteslice(@offset, PARALLEL_FRAME_HEADER_BYTES).unpack1("N")
           frame_len = PARALLEL_FRAME_HEADER_BYTES + payload_len
-          return compact_and_yield_nil if @buf.bytesize - @offset < frame_len
+          if @buf.bytesize - @offset < frame_len
+            if @offset > 0
+              @buf = @buf.byteslice(@offset..) || +""
+              @offset = 0
+            end
+            return nil
+          end
 
           payload = @buf.byteslice(@offset + PARALLEL_FRAME_HEADER_BYTES, payload_len)
           @offset += frame_len
           payload
-        end
-
-        def compact!
-          return if @offset.zero?
-
-          if @offset == @buf.bytesize
-            @buf.clear
-            @offset = 0
-          else
-            @buf = @buf.byteslice(@offset..)
-            @offset = 0
-          end
-        end
-
-        def compact_and_yield_nil
-          compact!
-          nil
         end
       end
 
