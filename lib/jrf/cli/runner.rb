@@ -291,8 +291,8 @@ module Jrf
       def each_stream_value(stream)
         return each_stream_value_lax(stream) { |value| yield value } if @lax
 
-        stream.each_line do |raw_line|
-          line = raw_line.strip
+        stream.each_line do |line|
+          line.strip!
           next if line.empty?
           yield JSON.parse(line)
         end
