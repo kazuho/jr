@@ -11,11 +11,6 @@ module Jrf
       RS_CHAR = "\x1e"
       DEFAULT_OUTPUT_BUFFER_LIMIT = 4096
 
-      class InputError < StandardError
-        def initialize(path, cause)
-          super("#{path}: #{cause.message} (#{cause.class})")
-        end
-      end
 
       class RsNormalizer
         def initialize(input)
@@ -45,6 +40,11 @@ module Jrf
         @output_format = output_format
         @atomic_write_bytes = atomic_write_bytes
         @output_buffer = +""
+        @input_errors = false
+      end
+
+      def input_errors?
+        @input_errors
       end
 
       def run(expression, verbose: false)
@@ -358,7 +358,8 @@ module Jrf
               begin
                 open_file(path) { |source| yield source }
               rescue IOError, SystemCallError, Zlib::GzipFile::Error => e
-                raise InputError.new(path, e)
+                @err.puts "#{path}: #{e.message} (#{e.class})"
+                @input_errors = true
               end
             end
           end

@@ -104,16 +104,13 @@ module Jrf
         atomic_write_bytes: atomic_write_bytes
       )
 
-      begin
-        if parallel && parallel > 1 && file_paths.length > 1
-          runner.run_parallel(expression, file_paths, parallel, verbose: verbose)
-        else
-          runner.run(expression, verbose: verbose)
-        end
-      rescue Runner::InputError => e
-        err.puts e.message
-        exit 1
+      if parallel && parallel > 1 && file_paths.length > 1
+        runner.run_parallel(expression, file_paths, parallel, verbose: verbose)
+      else
+        runner.run(expression, verbose: verbose)
       end
+
+      exit 1 if runner.input_errors?
     end
 
     def self.enable_yjit

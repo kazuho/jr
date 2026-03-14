@@ -137,15 +137,25 @@ class CliParallelTest < JrfTestCase
 
   def test_serial_error_includes_filename
     Dir.mktmpdir do |dir|
-      bad_gz_path = File.join(dir, "bad.ndjson.gz")
+      good_path = File.join(dir, "a.ndjson")
+      File.write(good_path, "{\"x\":1}\n{\"x\":2}\n")
+
+      bad_gz_path = File.join(dir, "b.ndjson.gz")
       full_gz = StringIO.new
       Zlib::GzipWriter.wrap(full_gz) { |io| io.write("{\"x\":10}\n" * 100) }
       File.binwrite(bad_gz_path, full_gz.string[0, full_gz.string.bytesize / 2])
 
-      stdout, stderr, status = Open3.capture3("./exe/jrf", '_["x"]', bad_gz_path)
+      good_path2 = File.join(dir, "c.ndjson")
+      File.write(good_path2, "{\"x\":3}\n")
+
+      stdout, stderr, status = Open3.capture3("./exe/jrf", '_["x"]', good_path, bad_gz_path, good_path2)
       assert_failure(status, "serial error causes non-zero exit")
       assert_includes(stderr, bad_gz_path, "serial error message includes filename")
       refute_includes(stderr, "from ", "serial error does not include stacktrace")
+      # Data from good files should still be present
+      output_values = lines(stdout).map(&:to_i)
+      assert_includes(output_values, 1, "data before bad file preserved")
+      assert_includes(output_values, 3, "data after bad file preserved")
     end
   end
 
