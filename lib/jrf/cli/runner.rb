@@ -46,8 +46,8 @@ module Jrf
           end
         end
 
-        def finished_cleanly?
-          @offset == @buf.bytesize
+        def has_partial?
+          @offset != @buf.bytesize
         end
 
         private
@@ -234,7 +234,7 @@ module Jrf
             if chunk == :wait_readable
               next
             elsif chunk.nil?
-              raise IOError, "truncated parallel frame from worker" unless reader.finished_cleanly?
+              raise IOError, "truncated parallel frame from worker" if reader.has_partial?
               read_ios.delete(io)
               io.close
               workers.delete(io)
