@@ -11,7 +11,6 @@ module Jrf
       RS_CHAR = "\x1e"
       DEFAULT_OUTPUT_BUFFER_LIMIT = 4096
 
-
       class RsNormalizer
         def initialize(input)
           @input = input
