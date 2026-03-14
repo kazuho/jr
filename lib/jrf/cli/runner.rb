@@ -72,7 +72,7 @@ module Jrf
 
         def compact!
           if @offset > 0
-            @buf = @buf.byteslice(@offset..) || +""
+            @buf.slice!(0, @offset)
             @offset = 0
           end
         end
