@@ -101,7 +101,7 @@ module Jrf
         @input_errors
       end
 
-      def run(expression, parallel: nil, verbose: false)
+      def run(expression, parallel: 1, verbose: false)
         blocks = build_stage_blocks(expression, verbose: verbose)
         emit_values(processed_values(blocks, parallel: parallel, verbose: verbose))
       ensure
@@ -131,7 +131,7 @@ module Jrf
       end
 
       def processed_values(blocks, parallel:, verbose:)
-        unless parallel_enabled?(parallel)
+        if parallel <= 1 || @file_paths.length <= 1
           dump_parallel_status("disabled", verbose: verbose)
           return apply_pipeline(blocks, each_input_enum)
         end
@@ -150,17 +150,19 @@ module Jrf
         reduce_blocks.empty? ? input_enum : apply_pipeline(reduce_blocks, input_enum)
       end
 
-      def parallel_enabled?(parallel)
-        parallel && parallel > 1 && @file_paths.length > 1
-      end
-
       def dump_parallel_status(status, verbose:)
         @err.puts "parallel: #{status}" if verbose
       end
 
       def classify_parallel_stages(blocks)
         # Read the first row from the first file to probe stage modes
-        first_value = read_parallel_probe_value(@file_paths.first)
+        first_value = nil
+        open_file(@file_paths.first) do |stream|
+          each_stream_value(stream) do |value|
+            first_value = value
+            break
+          end
+        end
         return nil if first_value.nil?
 
         # Run the value through each stage independently to classify
@@ -176,12 +178,6 @@ module Jrf
         end
 
         split_index || blocks.length
-      end
-
-      def read_parallel_probe_value(path)
-        open_file(path) do |source|
-          first_stream_value(source)
-        end
       end
 
       def open_file(path)
@@ -319,15 +315,6 @@ module Jrf
         raise "oj is required for --lax mode (gem install oj)"
       rescue Oj::ParseError => e
         raise JSON::ParserError, e.message
-      end
-
-      def first_stream_value(stream)
-        result = nil
-        each_stream_value(stream) do |value|
-          result = value
-          break
-        end
-        result
       end
 
       def streaming_json_handler_class

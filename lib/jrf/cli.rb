@@ -46,7 +46,7 @@ module Jrf
       verbose = false
       lax = false
       output_format = :json
-      parallel = nil
+      parallel = 1
       jit = true
       required_libraries = []
       atomic_write_bytes = Runner::DEFAULT_OUTPUT_BUFFER_LIMIT
