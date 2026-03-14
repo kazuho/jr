@@ -103,7 +103,13 @@ module Jrf
 
       def run(expression, parallel: 1, verbose: false)
         blocks = build_stage_blocks(expression, verbose: verbose)
-        emit_values(processed_values(blocks, parallel: parallel, verbose: verbose))
+        if @output_format == :tsv
+          values = []
+          process_values(blocks, parallel: parallel, verbose: verbose) { |value| values << value }
+          emit_tsv(values)
+        else
+          process_values(blocks, parallel: parallel, verbose: verbose) { |value| emit_output(value) }
+        end
       ensure
         write_output(@output_buffer)
       end
@@ -130,24 +136,24 @@ module Jrf
         Enumerator.new { |y| each_input_value { |v| y << v } }
       end
 
-      def processed_values(blocks, parallel:, verbose:)
+      def process_values(blocks, parallel:, verbose:, &block)
         if parallel <= 1 || @file_paths.length <= 1
           dump_parallel_status("disabled", verbose: verbose)
-          return apply_pipeline(blocks, each_input_enum)
+          return apply_pipeline(blocks, each_input_enum).each(&block)
         end
 
         # Parallelize the longest map-only prefix; reducers stay in the parent.
         split_index = classify_parallel_stages(blocks)
         if split_index.nil? || split_index == 0
           dump_parallel_status("disabled", verbose: verbose)
-          return apply_pipeline(blocks, each_input_enum)
+          return apply_pipeline(blocks, each_input_enum).each(&block)
         end
 
         map_blocks = blocks[0...split_index]
         reduce_blocks = blocks[split_index..] || []
         dump_parallel_status("enabled workers=#{parallel} files=#{@file_paths.length} split=#{split_index}/#{blocks.length}", verbose: verbose)
         input_enum = parallel_map_enum(map_blocks, parallel)
-        reduce_blocks.empty? ? input_enum : apply_pipeline(reduce_blocks, input_enum)
+        (reduce_blocks.empty? ? input_enum : apply_pipeline(reduce_blocks, input_enum)).each(&block)
       end
 
       def dump_parallel_status(status, verbose:)
@@ -275,16 +281,6 @@ module Jrf
           failed = true unless status.success?
         end
         exit(1) if failed
-      end
-
-      def emit_values(input_enum)
-        if @output_format == :tsv
-          values = []
-          input_enum.each { |value| values << value }
-          emit_tsv(values)
-        else
-          input_enum.each { |value| emit_output(value) }
-        end
       end
 
       def emit_parallel_frame(value)
