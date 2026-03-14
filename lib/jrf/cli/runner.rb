@@ -21,7 +21,7 @@ module Jrf
           chunk = @input.read(length)
           return nil if chunk.nil?
 
-          chunk = chunk.tr(RS_CHAR, "\n")
+          chunk.tr!(RS_CHAR, "\n")
           if outbuf
             outbuf.replace(chunk)
           else
