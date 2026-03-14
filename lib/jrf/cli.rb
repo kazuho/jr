@@ -104,7 +104,7 @@ module Jrf
       )
 
       if parallel && parallel > 1 && file_paths.length > 1
-        runner.run_parallel(expression, file_paths, parallel, verbose: verbose)
+        runner.run_parallel(expression, parallel, verbose: verbose)
       else
         runner.run(expression, verbose: verbose)
       end

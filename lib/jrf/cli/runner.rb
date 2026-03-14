@@ -57,11 +57,11 @@ module Jrf
         write_output(@output_buffer)
       end
 
-      def run_parallel(expression, file_paths, num_workers, verbose: false)
+      def run_parallel(expression, num_workers, verbose: false)
         blocks = build_stage_blocks(expression, verbose: verbose)
 
         # Parallelize the longest map-only prefix; reducers stay in the parent.
-        split_index = classify_parallel_stages(blocks, file_paths)
+        split_index = classify_parallel_stages(blocks)
 
         if split_index.nil? || split_index == 0
           # No map stages or all stages are reducers — run single-threaded
@@ -71,7 +71,7 @@ module Jrf
 
         map_blocks = blocks[0...split_index]
         reduce_blocks = blocks[split_index..] || []
-        input_enum = parallel_map_enum(map_blocks, file_paths, num_workers)
+        input_enum = parallel_map_enum(map_blocks, num_workers)
         emit_values(reduce_blocks.empty? ? input_enum : apply_pipeline(reduce_blocks, input_enum))
       ensure
         write_output(@output_buffer)
@@ -99,9 +99,9 @@ module Jrf
         Enumerator.new { |y| each_input_value { |v| y << v } }
       end
 
-      def classify_parallel_stages(blocks, file_paths)
+      def classify_parallel_stages(blocks)
         # Read the first row from the first file to probe stage modes
-        first_value = read_parallel_probe_value(file_paths.first)
+        first_value = read_parallel_probe_value(@file_paths.first)
         return nil if first_value.nil?
 
         # Run the value through each stage independently to classify
@@ -184,8 +184,8 @@ module Jrf
         [read_io, +(+""), pid]
       end
 
-      def run_parallel_worker_pool(blocks, file_paths, num_workers)
-        file_queue = file_paths.dup
+      def run_parallel_worker_pool(blocks, num_workers)
+        file_queue = @file_paths.dup
         workers = {} # read_io => [buf, pid]
         children = []
 
@@ -235,10 +235,10 @@ module Jrf
         children
       end
 
-      def parallel_map_enum(map_blocks, file_paths, num_workers)
+      def parallel_map_enum(map_blocks, num_workers)
         children = nil
         Enumerator.new do |y|
-          children = run_parallel_worker_pool(map_blocks, file_paths, num_workers) { |line| y << JSON.parse(line) }
+          children = run_parallel_worker_pool(map_blocks, num_workers) { |line| y << JSON.parse(line) }
         ensure
           wait_for_parallel_children(children) if children
         end
