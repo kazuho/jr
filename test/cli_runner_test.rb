@@ -106,24 +106,23 @@ class CliRunnerTest < JrfTestCase
 
   def test_runner_buffering_and_require_option
     threshold_input = StringIO.new((1..4).map { |i| "{\"foo\":\"#{'x' * 1020}\",\"i\":#{i}}\n" }.join)
-    buffered_runner = RecordingRunner.new(inputs: [threshold_input], out: StringIO.new, err: StringIO.new)
+    buffered_runner = RecordingRunner.new(input: threshold_input, out: StringIO.new, err: StringIO.new)
     buffered_runner.run('_')
     expected_line = JSON.generate({"foo" => "x" * 1020, "i" => 1}) + "\n"
     assert_equal(2, buffered_runner.writes.length, "default atomic write limit buffers records until the configured threshold")
     assert_equal(expected_line.bytesize * 3, buffered_runner.writes.first.bytesize, "default atomic write limit flushes before the next record would exceed the threshold")
     assert_equal(expected_line.bytesize, buffered_runner.writes.last.bytesize, "final buffer flush emits the remaining record")
 
-    small_limit_runner = RecordingRunner.new(inputs: [StringIO.new("{\"foo\":1}\n{\"foo\":2}\n")], out: StringIO.new, err: StringIO.new, atomic_write_bytes: 1)
+    small_limit_runner = RecordingRunner.new(input: StringIO.new("{\"foo\":1}\n{\"foo\":2}\n"), out: StringIO.new, err: StringIO.new, atomic_write_bytes: 1)
     small_limit_runner.run('_["foo"]')
     assert_equal(["1\n", "2\n"], small_limit_runner.writes, "small atomic write limit emits oversized records directly")
 
-    error_runner = RecordingRunner.new(inputs: [StringIO.new("{\"foo\":1}\n{\"foo\":")], out: StringIO.new, err: StringIO.new)
-    begin
-      error_runner.run('_["foo"]')
-      flunk("expected parse error for buffered flush test")
-    rescue JSON::ParserError
-      assert_equal(["1\n"], error_runner.writes, "buffer flushes pending output before parse errors escape")
-    end
+    err_io = StringIO.new
+    error_runner = RecordingRunner.new(input: StringIO.new("{\"foo\":1}\n{\"foo\":"), out: StringIO.new, err: err_io)
+    error_runner.run('_["foo"]')
+    assert_equal(["1\n"], error_runner.writes, "buffer flushes pending output before parse errors")
+    assert_includes(err_io.string, "JSON::ParserError", "parse error reported to stderr")
+    assert(error_runner.input_errors?, "input_errors? is true after parse error")
 
     input_hello = <<~NDJSON
       {"hello":123}
@@ -648,7 +647,7 @@ class CliRunnerTest < JrfTestCase
     assert_equal(%w[9], lines(stdout), "lax trailing separator output")
 
     chunked_lax_out = RecordingRunner.new(
-      inputs: [ChunkedSource.new("{\"foo\":1}\n\x1e{\"foo\":2}\n\t{\"foo\":3}\n")],
+      input: ChunkedSource.new("{\"foo\":1}\n\x1e{\"foo\":2}\n\t{\"foo\":3}\n"),
       out: StringIO.new,
       err: StringIO.new,
       lax: true
@@ -691,6 +690,7 @@ class CliRunnerTest < JrfTestCase
     assert_failure(status, "broken input should fail")
     assert_equal(%w[3], lines(stdout), "reducers flush before parse error")
     assert_includes(stderr, "JSON::ParserError")
+    refute_includes(stderr, "from ", "no stacktrace for parse errors")
   end
 
   def test_map

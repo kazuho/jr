@@ -18,6 +18,7 @@ module Jrf
         --lax          allow multiline JSON texts; split inputs by whitespace (also detects JSON-SEQ RS 0x1e)
         -o, --output FORMAT
                        output format: json (default), pretty, tsv
+        -P N           opportunistically parallelize the map-prefix across N workers
         -r, --require LIBRARY
                        require LIBRARY before evaluating stages
         --no-jit       do not enable YJIT, even when supported by the Ruby runtime
@@ -45,6 +46,7 @@ module Jrf
       verbose = false
       lax = false
       output_format = :json
+      parallel = 1
       jit = true
       required_libraries = []
       atomic_write_bytes = Runner::DEFAULT_OUTPUT_BUFFER_LIMIT
@@ -54,6 +56,7 @@ module Jrf
           opts.on("-v", "--verbose", "print parsed stage expressions") { verbose = true }
           opts.on("--lax", "allow multiline JSON texts; split inputs by whitespace (also detects JSON-SEQ RS 0x1e)") { lax = true }
           opts.on("-o", "--output FORMAT", %w[json pretty tsv], "output format: json, pretty, tsv") { |fmt| output_format = fmt.to_sym }
+          opts.on("-P N", Integer, "opportunistically parallelize the map-prefix across N workers") { |n| parallel = n }
           opts.on("-r", "--require LIBRARY", "require LIBRARY before evaluating stages") { |library| required_libraries << library }
           opts.on("--no-jit", "do not enable YJIT, even when supported by the Ruby runtime") { jit = false }
           opts.on("--atomic-write-bytes N", Integer, "group short outputs into atomic writes of up to N bytes") do |value|
@@ -89,34 +92,20 @@ module Jrf
       enable_yjit if jit
       required_libraries.each { |library| require library }
 
-      inputs = Enumerator.new do |y|
-        if argv.empty?
-          y << input
-        else
-          argv.each do |path|
-            if path == "-"
-              y << input
-            elsif path.end_with?(".gz")
-              require "zlib"
-              Zlib::GzipReader.open(path) do |source|
-                y << source
-              end
-            else
-              File.open(path, "rb") do |source|
-                y << source
-              end
-            end
-          end
-        end
-      end
-      Runner.new(
-        inputs: inputs,
+      file_paths = argv.dup
+
+      runner = Runner.new(
+        input: file_paths.empty? ? input : file_paths,
         out: out,
         err: err,
         lax: lax,
         output_format: output_format,
         atomic_write_bytes: atomic_write_bytes
-      ).run(expression, verbose: verbose)
+      )
+
+      runner.run(expression, parallel: parallel, verbose: verbose)
+
+      exit 1 if runner.input_errors?
     end
 
     def self.enable_yjit
