@@ -180,32 +180,7 @@ module Jrf
 
       def read_parallel_probe_value(path)
         open_file(path) do |source|
-          if @lax
-            require "oj"
-            result = nil
-            handler = Class.new(Oj::ScHandler) do
-              define_method(:initialize) { |&emit| @emit = emit }
-              def hash_start = {}
-              def hash_key(key) = key
-              def hash_set(hash, key, value) = hash[key] = value
-              def array_start = []
-              def array_append(array, value) = array << value
-              def add_value(value) = @emit.call(value)
-            end
-            begin
-              Oj.sc_parse(handler.new { |v| result = v; raise StopIteration }, RsNormalizer.new(source))
-            rescue StopIteration
-              # got our first value
-            end
-            result
-          else
-            source.each_line do |raw_line|
-              line = raw_line.strip
-              next if line.empty?
-              return JSON.parse(line)
-            end
-            nil
-          end
+          first_source_value(source)
         end
       end
 
@@ -225,7 +200,7 @@ module Jrf
           @output_buffer = +""
           pipeline = Pipeline.new(*blocks)
           input_enum = Enumerator.new do |y|
-            open_file(path) { |source| each_parallel_source_value(source) { |v| y << v } }
+            open_file(path) { |source| each_source_value(source) { |v| y << v } }
           end
           worker_failed = false
           begin
@@ -297,28 +272,6 @@ module Jrf
         end
       end
 
-      def each_parallel_source_value(source)
-        if @lax
-          require "oj"
-          handler = Class.new(Oj::ScHandler) do
-            define_method(:initialize) { |&emit| @emit = emit }
-            def hash_start = {}
-            def hash_key(key) = key
-            def hash_set(hash, key, value) = hash[key] = value
-            def array_start = []
-            def array_append(array, value) = array << value
-            def add_value(value) = @emit.call(value)
-          end
-          Oj.sc_parse(handler.new { |value| yield value }, RsNormalizer.new(source))
-        else
-          source.each_line do |raw_line|
-            line = raw_line.strip
-            next if line.empty?
-            yield JSON.parse(line)
-          end
-        end
-      end
-
       def wait_for_parallel_children(children)
         failed = false
         children.each do |pid|
@@ -344,25 +297,41 @@ module Jrf
       end
 
       def each_input_value
-        return each_input_value_lax { |value| yield value } if @lax
-
-        each_input_value_ndjson { |value| yield value }
-      end
-
-      def each_input_value_ndjson
         each_input do |source|
-          source.each_line do |raw_line|
-            line = raw_line.strip
-            next if line.empty?
-
-            yield JSON.parse(line)
-          end
+          each_source_value(source) { |value| yield value }
         end
       end
 
-      def each_input_value_lax
+      def each_source_value(source)
+        return each_source_value_lax(source) { |value| yield value } if @lax
+
+        source.each_line do |raw_line|
+          line = raw_line.strip
+          next if line.empty?
+          yield JSON.parse(line)
+        end
+      end
+
+      def each_source_value_lax(source)
         require "oj"
-        handler = Class.new(Oj::ScHandler) do
+        Oj.sc_parse(streaming_json_handler_class.new { |value| yield value }, RsNormalizer.new(source))
+      rescue LoadError
+        raise "oj is required for --lax mode (gem install oj)"
+      rescue Oj::ParseError => e
+        raise JSON::ParserError, e.message
+      end
+
+      def first_source_value(source)
+        result = nil
+        each_source_value(source) do |value|
+          result = value
+          break
+        end
+        result
+      end
+
+      def streaming_json_handler_class
+        @streaming_json_handler_class ||= Class.new(Oj::ScHandler) do
           def initialize(&emit)
             @emit = emit
           end
@@ -374,13 +343,6 @@ module Jrf
           def array_append(array, value) = array << value
           def add_value(value) = @emit.call(value)
         end
-        each_input do |source|
-          Oj.sc_parse(handler.new { |value| yield value }, RsNormalizer.new(source))
-        end
-      rescue LoadError
-        raise "oj is required for --lax mode (gem install oj)"
-      rescue Oj::ParseError => e
-        raise JSON::ParserError, e.message
       end
 
       def dump_stages(stages)
