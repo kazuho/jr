@@ -53,8 +53,9 @@ class CliParallelTest < JrfTestCase
       write_ndjson(dir, "a.ndjson", [{"x" => 10}, {"x" => 20}])
       write_ndjson(dir, "b.ndjson", [{"x" => 30}, {"x" => 40}])
 
-      stdout, stderr, status = Open3.capture3("./exe/jrf", "-P", "2", 'select(_["x"] > 10) >> sum(_["x"])', *ndjson_files(dir))
+      stdout, stderr, status = Open3.capture3("./exe/jrf", "-v", "-P", "2", 'select(_["x"] > 10) >> sum(_["x"])', *ndjson_files(dir))
       assert_success(status, stderr, "parallel split map+reduce")
+      assert_includes(stderr, "decompose=2/2", "select+sum decomposed")
       assert_equal(%w[90], lines(stdout), "parallel split map+reduce output")
     end
   end
@@ -154,8 +155,9 @@ class CliParallelTest < JrfTestCase
       write_ndjson(dir, "a.ndjson", [{"x" => 1}, {"x" => 20}, {"x" => 3}])
       write_ndjson(dir, "b.ndjson", [{"x" => 40}, {"x" => 5}])
 
-      stdout, stderr, status = Open3.capture3("./exe/jrf", "-P", "2", 'select(_["x"] > 10) >> sum(_["x"])', *ndjson_files(dir))
+      stdout, stderr, status = Open3.capture3("./exe/jrf", "-v", "-P", "2", 'select(_["x"] > 10) >> sum(_["x"])', *ndjson_files(dir))
       assert_success(status, stderr, "parallel select then sum")
+      assert_includes(stderr, "decompose=2/2", "select+sum fully decomposed in workers")
       assert_equal(%w[60], lines(stdout), "parallel select then sum output")
     end
   end

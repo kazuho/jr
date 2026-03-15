@@ -146,20 +146,24 @@ module Jrf
           return apply_pipeline(blocks, each_input_enum).each(&block)
         end
 
-        # Parallelize the longest map-only prefix; reducers stay in the parent.
         split_index, probe_stage = classify_parallel_stages(blocks)
         if split_index.nil?
           dump_parallel_status("disabled", verbose: verbose)
           return apply_pipeline(blocks, each_input_enum).each(&block)
         end
 
+        # If the first reducer stage is decomposable, workers run everything up to
+        # and including it (map prefix + reducer), emit partial accumulators, and the
+        # parent merges. This covers both pure reducers (split_index == 0, e.g. `sum(_)`)
+        # and map-then-reduce (split_index > 0, e.g. `select(...) >> sum(...)`).
+        if probe_stage&.decomposable?
+          worker_blocks = blocks[0..split_index]
+          rest_blocks = blocks[(split_index + 1)..]
+          return process_decomposable_parallel(worker_blocks, rest_blocks, probe_stage,
+                                               parallel: parallel, verbose: verbose, &block)
+        end
+
         if split_index == 0
-          # All stages start with a reducer. Check if the first reducer stage is
-          # decomposable — if so, workers compute partial accumulators per file and
-          # the parent merges them.
-          if probe_stage&.decomposable?
-            return process_decomposable_parallel(blocks, probe_stage, parallel: parallel, verbose: verbose, &block)
-          end
           dump_parallel_status("disabled", verbose: verbose)
           return apply_pipeline(blocks, each_input_enum).each(&block)
         end
@@ -206,19 +210,18 @@ module Jrf
         [split_index || blocks.length, probe_stage]
       end
 
-      def process_decomposable_parallel(blocks, probe_stage, parallel:, verbose:, &block)
-        reducer_block = blocks[0]
-        rest_blocks = blocks[1..]
-        dump_parallel_status("enabled workers=#{parallel} files=#{@file_paths.length} decompose=1/#{blocks.length}", verbose: verbose)
+      def process_decomposable_parallel(worker_blocks, rest_blocks, probe_stage, parallel:, verbose:, &block)
+        dump_parallel_status("enabled workers=#{parallel} files=#{@file_paths.length} decompose=#{worker_blocks.length}/#{worker_blocks.length + rest_blocks.length}", verbose: verbose)
 
-        # Workers run the reducer stage per file and emit partial accumulators.
+        # Workers run map prefix + reducer stage per file and emit partial accumulators.
         partials_list = []
+        reducer_stage_index = worker_blocks.length - 1
         spawner = ->(path) do
-          spawn_worker([reducer_block], path) do |pipeline, input|
+          spawn_worker(worker_blocks, path) do |pipeline, input|
             pipeline.call(input) { |_| }
             # If the file was empty, the stage was never initialized (no reducers),
             # so skip emitting — the parent will simply not receive a partial for this worker.
-            stage = pipeline.instance_variable_get(:@stages).first
+            stage = pipeline.instance_variable_get(:@stages)[reducer_stage_index]
             partials = stage.partial_accumulators
             emit_parallel_frame(partials) unless partials.empty?
           end
