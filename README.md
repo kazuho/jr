@@ -75,15 +75,30 @@ jrf 'group_by(_["status"]) { |row| average(row["latency"]) }'
 jrf --require ./my_helpers.rb 'my_method(_)'
 ```
 
-Ruby is also fast and memory-efficient: jrf’s core logic and user-supplied expressions are optimized together by the same [JIT](https://docs.ruby-lang.org/en/3.4/yjit/yjit_md.html), strings are copied only when necessary, and Ruby comes with a [heavily optimized JSON parser](https://byroot.github.io/ruby/json/2024/12/15/optimizing-ruby-json-part-1.html). As a result, `jrf` outperforms `jq` — here over 3x on a simple aggregation:
+Ruby is also fast and memory-efficient: jrf’s core logic and user-supplied expressions are optimized together by the same [JIT](https://docs.ruby-lang.org/en/3.4/yjit/yjit_md.html), strings are copied only when necessary, and Ruby comes with a [heavily optimized JSON parser](https://byroot.github.io/ruby/json/2024/12/15/optimizing-ruby-json-part-1.html).
+
+For example:
 
 ```sh
-% time jq -s 'map(.tid) | min' < large.ldjson
+% jq -n 'reduce inputs as $x (null; ($x.tid) as $t | if . == null or $t < . then $t else . end)' < large.ldjson
 327936
-jq -s 'map(.tid) | min' < large.ldjson  4.90s user 0.46s system 99% cpu 5.395 total
-% time jrf 'min(_["tid"])' < large.ldjson
+# elapsed: 4.919s
+
+% jrf 'min(_["tid"])' < large.ldjson
 327936
-exe/jrf 'min(_["tid"])' < large.ldjson  1.37s user 0.15s system 99% cpu 1.531 total
+# elapsed: 1.470s
+```
+
+On many JSON files, including gzipped ones, jrf can parallelize processing across files with `-P`, making it over 20x faster here:
+
+```sh
+% (for i in large.ldjson.*.gz; do gzip -cd $i; done) | jq -n 'reduce inputs as $x (null; ($x.tid) as $t | if . == null or $t < . then $t else . end)'
+327936
+# elapsed: 49.837s
+
+% jrf -P 10 'min(_["tid"])' large.ldjson.*.gz
+327936
+# elapsed: 2.260s
 ```
 
 Give it a try — install via RubyGems: `gem install jrf`
