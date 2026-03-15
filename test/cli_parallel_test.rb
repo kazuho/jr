@@ -253,6 +253,30 @@ class CliParallelTest < JrfTestCase
     end
   end
 
+  def test_parallel_select_sum_passthrough_decomposes
+    Dir.mktmpdir do |dir|
+      write_ndjson(dir, "a.ndjson", [{"x" => 1}, {"x" => 20}])
+      write_ndjson(dir, "b.ndjson", [{"x" => 40}])
+
+      stdout, stderr, status = Open3.capture3("./exe/jrf", "-v", "-P", "2", 'select(_["x"] > 10) >> sum(_["x"]) >> _ * 2', *ndjson_files(dir))
+      assert_success(status, stderr, "select+sum+passthrough")
+      assert_includes(stderr, "decompose=2/3", "select+sum decomposed, passthrough in parent")
+      assert_equal(%w[120], lines(stdout), "select+sum+passthrough output")
+    end
+  end
+
+  def test_parallel_select_non_decomposable_uses_split
+    Dir.mktmpdir do |dir|
+      write_ndjson(dir, "a.ndjson", [{"x" => 3}, {"x" => 1}])
+      write_ndjson(dir, "b.ndjson", [{"x" => 2}])
+
+      stdout, stderr, status = Open3.capture3("./exe/jrf", "-v", "-P", "2", 'select(_["x"] > 0) >> sort(_["x"]) >> _["x"]', *ndjson_files(dir))
+      assert_success(status, stderr, "select+sort uses split")
+      assert_includes(stderr, "split=1/3", "non-decomposable sort uses map-prefix split")
+      assert_equal([1, 2, 3], lines(stdout).map { |l| JSON.parse(l) }, "select+sort output")
+    end
+  end
+
   def test_parallel_decomposable_with_empty_file
     Dir.mktmpdir do |dir|
       write_ndjson(dir, "a.ndjson", [{"x" => 1}, {"x" => 2}])
