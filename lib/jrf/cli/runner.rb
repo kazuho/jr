@@ -158,7 +158,7 @@ module Jrf
           # decomposable — if so, workers compute partial accumulators per file and
           # the parent merges them.
           if probe_stage&.decomposable?
-            return process_decomposable_parallel(blocks, parallel: parallel, verbose: verbose, &block)
+            return process_decomposable_parallel(blocks, probe_stage, parallel: parallel, verbose: verbose, &block)
           end
           dump_parallel_status("disabled", verbose: verbose)
           return apply_pipeline(blocks, each_input_enum).each(&block)
@@ -206,34 +206,34 @@ module Jrf
         [split_index || blocks.length, probe_stage]
       end
 
-      def process_decomposable_parallel(blocks, parallel:, verbose:, &block)
+      def process_decomposable_parallel(blocks, probe_stage, parallel:, verbose:, &block)
         reducer_block = blocks[0]
         rest_blocks = blocks[1..]
         dump_parallel_status("enabled workers=#{parallel} files=#{@file_paths.length} decompose=1/#{blocks.length}", verbose: verbose)
 
         # Workers run the reducer stage per file and emit partial accumulators.
-        partials_list = collect_reducer_partials(reducer_block, parallel)
+        partials_list = []
+        spawner = ->(path) do
+          spawn_worker([reducer_block], path) do |pipeline, input|
+            pipeline.call(input) { |_| }
+            # If the file was empty, the stage was never initialized (no reducers),
+            # so skip emitting — the parent will simply not receive a partial for this worker.
+            stage = pipeline.instance_variable_get(:@stages).first
+            partials = stage.partial_accumulators
+            emit_parallel_frame(partials) unless partials.empty?
+          end
+        end
+        children = run_parallel_worker_pool(parallel, spawner) { |v| partials_list << v }
+        wait_for_parallel_children(children) if children
         return if partials_list.empty?
 
-        # Build a pipeline and probe it to initialize the reducer structure (mode, template).
-        # The probe value has already been processed by a worker, so we replace the
-        # accumulators entirely with the collected partials.
-        first_value = nil
-        open_file(@file_paths.first) do |stream|
-          each_stream_value(stream) { |v| first_value = v; break }
-        end
-        return if first_value.nil?
-
-        pipeline = Pipeline.new(reducer_block)
-        pipeline.call([first_value]) { |_| }
-        stage = pipeline.instance_variable_get(:@stages).first
-
-        # Replace accumulators with the first worker's partials, then merge the rest.
-        stage.replace_accumulators!(partials_list.first)
-        partials_list.drop(1).each { |partials| stage.merge_partials!(partials) }
+        # Reuse the probe stage (already initialized with reducer structure from classify).
+        # Replace its accumulators with the first worker's partials, then merge the rest.
+        probe_stage.replace_accumulators!(partials_list.first)
+        partials_list.drop(1).each { |partials| probe_stage.merge_partials!(partials) }
 
         # Finish the reducer stage and pass results through any remaining stages.
-        results = stage.finish
+        results = probe_stage.finish
         if rest_blocks.empty?
           results.each(&block)
         else
@@ -241,48 +241,10 @@ module Jrf
         end
       end
 
-      def spawn_reducer_worker(block, path)
-        read_io, write_io = IO.pipe
-        pid = fork do
-          read_io.close
-          @out = write_io
-          @output_buffer = +""
-          pipeline = Pipeline.new(block)
-          input_enum = Enumerator.new do |y|
-            open_file(path) { |stream| each_stream_value(stream) { |v| y << v } }
-          end
-          worker_failed = false
-          begin
-            # Run all input through the reducer stage (output is suppressed for reducers)
-            pipeline.call(input_enum) { |_| }
-            # Emit partial accumulators as a single frame.
-            # If the file was empty, the stage was never initialized (no reducers),
-            # so skip emitting — the parent will simply not receive a partial for this worker.
-            stage = pipeline.instance_variable_get(:@stages).first
-            partials = stage.partial_accumulators
-            emit_parallel_frame(partials) unless partials.empty?
-          rescue => e
-            @err.puts "#{path}: #{e.message} (#{e.class})"
-            worker_failed = true
-          end
-          write_output(@output_buffer)
-          write_io.close
-          exit!(worker_failed ? 1 : 0)
-        end
-        write_io.close
-        [read_io, pid]
-      end
-
-      def collect_reducer_partials(block, num_workers)
-        partials_list = []
-        children = run_parallel_worker_pool(num_workers, spawner: ->(path) { spawn_reducer_worker(block, path) }) do |value|
-          partials_list << value
-        end
-        wait_for_parallel_children(children) if children
-        partials_list
-      end
-
-      def spawn_parallel_worker(blocks, path)
+      # Forks a worker process that reads `path`, builds a pipeline from `blocks`,
+      # and yields [pipeline, input_enum] to the caller's block for custom behavior.
+      # Returns [read_io, pid].
+      def spawn_worker(blocks, path)
         read_io, write_io = IO.pipe
         pid = fork do
           read_io.close
@@ -294,7 +256,7 @@ module Jrf
           end
           worker_failed = false
           begin
-            pipeline.call(input_enum) { |value| emit_parallel_frame(value) }
+            yield pipeline, input_enum
           rescue => e
             @err.puts "#{path}: #{e.message} (#{e.class})"
             worker_failed = true
@@ -307,7 +269,10 @@ module Jrf
         [read_io, pid]
       end
 
-      def run_parallel_worker_pool(num_workers, spawner:)
+      # Runs a pool of up to `num_workers` concurrent workers across all input files.
+      # `spawner` is called with a file path and must return [read_io, pid].
+      # Yields each decoded JSON value from worker output frames.
+      def run_parallel_worker_pool(num_workers, spawner)
         file_queue = @file_paths.dup
         workers = {} # read_io => [reader, pid]
         children = []
@@ -355,8 +320,13 @@ module Jrf
 
       def parallel_map_enum(map_blocks, num_workers)
         children = nil
+        spawner = ->(path) do
+          spawn_worker(map_blocks, path) do |pipeline, input|
+            pipeline.call(input) { |value| emit_parallel_frame(value) }
+          end
+        end
         Enumerator.new do |y|
-          children = run_parallel_worker_pool(num_workers, spawner: ->(path) { spawn_parallel_worker(map_blocks, path) }) { |value| y << value }
+          children = run_parallel_worker_pool(num_workers, spawner) { |value| y << value }
         ensure
           wait_for_parallel_children(children) if children
         end
