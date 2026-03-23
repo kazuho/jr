@@ -336,12 +336,10 @@ module Jrf
       end
 
       def wait_for_parallel_children(children)
-        failed = false
         children.each do |pid|
           _, status = Process.waitpid2(pid)
-          failed = true unless status.success?
+          @input_errors = true unless status.success?
         end
-        exit(1) if failed
       end
 
       def emit_parallel_frame(value)
