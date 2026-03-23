@@ -101,7 +101,7 @@ module Jrf
       return true if j < 0
 
       prev = source[j]
-      !(/[[:alnum:]_\]\)]/.match?(prev))
+      !(/[[:alnum:]_\]\)\}]/.match?(prev))
     end
   end
 end

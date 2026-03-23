@@ -255,6 +255,10 @@ class CliRunnerTest < JrfTestCase
     stdout, stderr, status = run_jrf('(-> { 1 >> 2 }).call >> _ + 1', input_split)
     assert_success(status, stderr, "no split inside block")
     assert_equal(%w[1], lines(stdout), "no split inside block output")
+
+    stdout, stderr, status = run_jrf('(-> { 6 }).call / 3', input_split)
+    assert_success(status, stderr, "division after block")
+    assert_equal(%w[2], lines(stdout), "division after block output")
   end
 
   def test_flat
