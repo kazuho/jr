@@ -114,8 +114,7 @@ class LibraryApiTest < JrfTestCase
   end
 
   def test_stage_reduce_control_tokens
-    ctx = Jrf::RowContext.new
-    stage = Jrf::Stage.new(ctx, proc { })
+    stage = Jrf::Stage.new(proc { })
     first_token = stage.step_reduce(1, initial: 0) { |acc, v| acc + v }
     assert_equal(0, first_token.index, "step_reduce returns token while classifying reducer stage")
     stage.instance_variable_set(:@mode, :reducer)

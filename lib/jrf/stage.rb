@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "control"
+require_relative "row_context"
 require_relative "reducers"
 
 module Jrf
@@ -22,22 +23,23 @@ module Jrf
       end
     end
 
-    def initialize(ctx, block, src: nil)
-      @ctx = ctx
-      @block = block
+    def initialize(block, src: nil)
       @src = src
       @reducers = []
       @cursor = 0
       @template = nil
       @mode = nil # nil=unknown, :reducer, :passthrough
       @map_transforms = {}
+      @ctx = Class.new(RowContext) do
+        define_method(:__jrf_expr__, &block)
+      end.new
     end
 
     def call(input)
       @ctx.reset(input)
       @cursor = 0
       @ctx.__jrf_current_stage = self
-      result = @ctx.instance_eval(&@block)
+      result = @ctx.__jrf_expr__
 
       if @mode.nil?
         if @reducers.any?

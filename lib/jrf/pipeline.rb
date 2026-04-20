@@ -9,8 +9,7 @@ module Jrf
     def initialize(*blocks)
       raise ArgumentError, "at least one stage block is required" if blocks.empty?
 
-      @ctx = RowContext.new
-      @stages = blocks.map { |block| Stage.new(@ctx, block, src: nil) }
+      @stages = blocks.map { |block| Stage.new(block, src: nil) }
     end
 
     # Run the pipeline on an enumerable of input values.
